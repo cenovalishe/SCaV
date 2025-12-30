@@ -5,6 +5,15 @@ import { MAP_NODES_DATA } from '@/lib/mapData'; // Импортируем нов
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 
+// Определим тип ответа сверху файла
+type MoveResponse = {
+  success: boolean;
+  message?: string;
+  event?: string;
+  loot?: string;
+};
+
+
 export async function movePlayer(gameId: string, playerId: string, targetNodeId: string) {
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
@@ -43,7 +52,12 @@ export async function movePlayer(gameId: string, playerId: string, targetNodeId:
     });
 
     revalidatePath('/');
-    return { success: true };
+    // В конце функции при успехе:
+    return { 
+      success: true, 
+      message: `Moved to ${targetNodeId}`, 
+      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR" 
+    };
   } catch (e) {
     return { success: false, message: "Error" };
   }
