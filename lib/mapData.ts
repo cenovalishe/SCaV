@@ -553,19 +553,19 @@ export function getAnimatronicsForNode(nodeId: string): AnimatronicType[] {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const ROOM_IMAGES: Record<string, string> = {
-  'R_START': 'https://i.pinimg.com/1200x/70/18/47/7018475dff804b92a3bbfe0c89f84d23.jpg',
+  'R_START': '/cameras/cam_enter.jpg',
   'R_MAIN': '/cameras/cam_main.jpg',
   'R_STAGE': '/cameras/cam_stage.jpg',
-  'R_BACK': 'https://i.pinimg.com/1200x/36/1c/25/361c25138e6623e17f5ebe02fd88e233.jpg',
-  'R_COVE': 'https://i.pinimg.com/1200x/f0/de/05/f0de0500bed43f091b985989f63b64ce.jpg',
+  'R_BACK': '/cameras/cam_backstage.jpg',
+  'R_COVE': '/cameras/cam_cove.jpg',
   'R_KITCH': 'https://static.wikia.nocookie.net/freddy-fazbears-pizza/images/d/d3/Kitchen.jpg/revision/latest?cb=20140825003350',
-  'R_WEST': 'https://i.pinimg.com/1200x/64/9d/04/649d0470e54687147536d7639c2c5eda.jpg',
-  'R_EAST': 'https://i.pinimg.com/1200x/53/9e/79/539e79016e526ec817edf4780f3e2aff.jpg',
-  'R_OFFICE': 'https://i.pinimg.com/1200x/ba/b0/e2/bab0e244da10e73ce77b53909c9a5c9e.jpg',
-  'R_REST_HALL': 'https://i.pinimg.com/1200x/a5/c5/49/a5c549b093049ff13f9514694288d382.jpg',
-  'R_REST_M': 'https://i.pinimg.com/1200x/a5/c5/49/a5c549b093049ff13f9514694288d382.jpg',
-  'R_REST_F': 'https://i.pinimg.com/1200x/a5/c5/49/a5c549b093049ff13f9514694288d382.jpg',
-  'R_CLST': 'https://static.wikia.nocookie.net/freddy-fazbears-pizza/images/6/62/62.png/revision/latest/scale-to-width-down/1000?cb=20140825032125',
+  'R_WEST': '/cameras/cam_westhall.jpg',
+  'R_EAST': '/cameras/cam_easthall.jpg',
+  'R_OFFICE': '/cameras/cam_office.jpg',
+  'R_REST_HALL': '/cameras/cam_restrooms.jpg',
+  'R_REST_M': '/cameras/cam_restrooms.jpg',
+  'R_REST_F': '/cameras/cam_restrooms.jpg',
+  'R_CLST': '/cameras/cam_closet.jpg',
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
