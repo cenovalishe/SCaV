@@ -4,15 +4,16 @@ import React from 'react';
 import { MAP_ROOMS, MAP_NODES_DATA } from '@/lib/mapData';
 import { movePlayer } from '@/app/actions/gameActions';
 
+// 1. Обновляем интерфейс пропсов
 interface GameMapProps {
   currentNodeId: string;
   gameId: string;
-  playerId: string; // Твой ID, чтобы выделить твою иконку
-  allPlayers: any[]; // Все игроки из useGame
+  playerId: string;
+  allPlayers: any[]; // ДОБАВЬ ЭТУ СТРОКУ
   enemies: any[];
 }
 
-export default function GameMap({ currentNodeId, gameId, playerId, enemies }: GameMapProps) {
+export default function GameMap({ currentNodeId, gameId, playerId, allPlayers = [0], enemies }: GameMapProps) {
   // 1. Находим текущий узел и его соседей
   const currentNode = MAP_NODES_DATA.find(n => n.id === currentNodeId);
   const neighbors = currentNode?.neighbors || [];
