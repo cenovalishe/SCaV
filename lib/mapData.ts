@@ -554,7 +554,7 @@ export function getAnimatronicsForNode(nodeId: string): AnimatronicType[] {
 
 export const ROOM_IMAGES: Record<string, string> = {
   'R_START': 'https://i.pinimg.com/1200x/70/18/47/7018475dff804b92a3bbfe0c89f84d23.jpg',
-  'R_MAIN': '/cameras/cam_stage.png',
+  'R_MAIN': '/cameras/cam_stage.jpg',
   'R_STAGE': 'https://i.pinimg.com/736x/04/31/98/043198b2dc13506e08e5312168ec738b.jpg',
   'R_BACK': 'https://i.pinimg.com/1200x/36/1c/25/361c25138e6623e17f5ebe02fd88e233.jpg',
   'R_COVE': 'https://i.pinimg.com/1200x/f0/de/05/f0de0500bed43f091b985989f63b64ce.jpg',
