@@ -262,7 +262,6 @@ export async function applyDamage(
 // LOOT ACTIONS - Лутинг локации
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { MAP_NODES_DATA } from '@/lib/mapData';
 
 export async function lootLocation(
   gameId: string,
