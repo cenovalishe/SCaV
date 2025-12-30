@@ -69,9 +69,28 @@
 'use client'
 
 import React, { useState } from 'react';
-import { MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS, DANGER_COLORS, MapNodeData } from '@/lib/mapData';
+import { MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS, DANGER_COLORS, MapNodeData, ANIMATRONIC_SPAWNS } from '@/lib/mapData';
 import { movePlayer } from '@/app/actions/gameActions';
 import MoveConfirmDialog from './MoveConfirmDialog';
+
+// Цвета для аниматроников
+const ANIMATRONIC_COLORS: Record<string, string> = {
+  'foxy': '#EF4444',    // Красный
+  'bonnie': '#3B82F6',  // Синий
+  'chica': '#EAB308',   // Жёлтый
+  'freddy': '#92400E',  // Коричневый
+  'default': '#EF4444'  // По умолчанию красный
+};
+
+// Цвета для игроков (по индексу)
+const PLAYER_COLORS = [
+  '#A855F7', // Фиолетовый (текущий игрок всегда фиолетовый)
+  '#22C55E', // Зелёный
+  '#F97316', // Оранжевый
+  '#06B6D4', // Голубой
+  '#EC4899', // Розовый
+  '#84CC16', // Лаймовый
+];
 
 interface GameMapProps {
   currentNodeId: string;
@@ -237,7 +256,7 @@ export default function GameMap({
           );
         })}
 
-        {/* Слой 1: Пути */}
+        {/* Слой 1: Пути - увеличенные и хорошо видимые */}
         {MAP_NODES_DATA.map(node =>
           node.neighbors.map(neighborId => {
             const neighbor = MAP_NODES_DATA.find(n => n.id === neighborId);
@@ -250,9 +269,10 @@ export default function GameMap({
                 y1={node.pos[1]}
                 x2={neighbor.pos[0]}
                 y2={neighbor.pos[1]}
-                stroke={isPath ? "#ef4444" : "#444"}
-                strokeWidth={isPath ? "0.5" : "0.3"}
-                strokeDasharray={node.type === "LOOP_DISTRIBUTOR" ? "1 1" : "0"}
+                stroke={isPath ? "#ef4444" : "#666"}
+                strokeWidth={isPath ? "1.2" : "0.8"}
+                strokeDasharray={node.type === "LOOP_DISTRIBUTOR" ? "2 1" : "0"}
+                strokeLinecap="round"
               />
             );
           })
@@ -266,10 +286,14 @@ export default function GameMap({
           const enemyInNode = enemies.find(e => e.currentNode === node.id);
           const playersHere = allPlayers.filter(p => p.currentNode === node.id);
 
+          // Специальные красные точки (6, 3, 4)
+          const isSpecialRedNode = ['6', '3', '4'].includes(node.id);
+
           // Цвет узла по типу
           let nodeColor = '#3f3f46'; // Обычный серый
           if (isCurrent) nodeColor = '#8b5cf6'; // Фиолетовый - текущая позиция
           else if (isNeighbor) nodeColor = '#22c55e'; // Зелёный - можно идти
+          else if (isSpecialRedNode) nodeColor = '#dc2626'; // Красный - специальные точки
           else if (node.lootType === 'rare') nodeColor = '#ef4444'; // Красный - редкий лут
           else if (node.lootType === 'supplies') nodeColor = '#3b82f6'; // Синий - расходники
 
@@ -279,11 +303,11 @@ export default function GameMap({
               className="transition-all cursor-pointer"
               onClick={() => handleNodeClick(node)}
             >
-              {/* Область клика */}
+              {/* Область клика - увеличена */}
               <circle
                 cx={node.pos[0]}
                 cy={node.pos[1]}
-                r="4"
+                r="6"
                 fill="transparent"
                 className="hover:fill-white/10"
               />
@@ -293,73 +317,114 @@ export default function GameMap({
                 <circle
                   cx={node.pos[0]}
                   cy={node.pos[1]}
-                  r="3"
+                  r="4.5"
                   fill="none"
                   stroke="#fff"
-                  strokeWidth="0.3"
-                  strokeDasharray="0.5 0.5"
+                  strokeWidth="0.4"
+                  strokeDasharray="1 0.5"
                   className="animate-pulse"
                 />
               )}
 
-              {/* Основной круг узла */}
+              {/* Основной круг узла - увеличен */}
               <circle
                 cx={node.pos[0]}
                 cy={node.pos[1]}
-                r={isCurrent ? 2 : isSelected ? 1.8 : 1.2}
+                r={isCurrent ? 3 : isSelected ? 2.8 : 2}
                 fill={nodeColor}
-                stroke={isNeighbor ? "#4ade80" : isSelected ? "#fff" : "none"}
-                strokeWidth="0.4"
+                stroke={isNeighbor ? "#4ade80" : isSelected ? "#fff" : "#333"}
+                strokeWidth={isNeighbor ? "0.8" : "0.4"}
                 className={isNeighbor ? "animate-pulse" : ""}
               />
 
-              {/* ID узла */}
+              {/* ID узла - увеличен */}
               <text
                 x={node.pos[0]}
-                y={node.pos[1] - 3}
-                fontSize="2"
-                fill={isCurrent ? "#fff" : isNeighbor ? "#fff" : isSelected ? "#fff" : "#666"}
+                y={node.pos[1] - 4.5}
+                fontSize="3"
+                fill={isCurrent ? "#fff" : isNeighbor ? "#fff" : isSelected ? "#fff" : "#888"}
                 textAnchor="middle"
                 className="font-mono font-bold select-none pointer-events-none"
+                style={{ textShadow: '0 0 2px rgba(0,0,0,0.8)' }}
               >
                 {node.id}
               </text>
 
               {/* Игроки */}
-              {playersHere.map((p, idx) => (
-                <circle
-                  key={p.id}
-                  cx={node.pos[0] - 1.5 + idx * 1.2}
-                  cy={node.pos[1] + 2.5}
-                  r="0.8"
-                  fill={p.id === playerId ? "#A855F7" : "#3B82F6"}
-                  className="transition-all duration-500"
-                />
-              ))}
+              {playersHere.map((p, idx) => {
+                // Текущий игрок - всегда фиолетовый, остальные по порядку
+                const isCurrentPlayer = p.id === playerId;
+                const playerIndex = allPlayers.findIndex(ap => ap.id === p.id);
+                const playerColor = isCurrentPlayer ? PLAYER_COLORS[0] : PLAYER_COLORS[(playerIndex % (PLAYER_COLORS.length - 1)) + 1];
 
-              {/* Враг */}
-              {enemyInNode && (
-                <circle
-                  cx={node.pos[0] + 1.8}
-                  cy={node.pos[1] - 1.8}
-                  r="0.9"
-                  fill="#ef4444"
-                  filter="drop-shadow(0 0 1px rgba(239, 68, 68, 0.5))"
-                >
-                  <animate
-                    attributeName="r"
-                    values="0.7;1.1;0.7"
-                    dur={`${1.5 + Math.random()}s`}
-                    repeatCount="indefinite"
-                  />
-                  <animate
-                    attributeName="opacity"
-                    values="0.6;1;0.6"
-                    dur="2s"
-                    repeatCount="indefinite"
-                  />
-                </circle>
-              )}
+                return (
+                  <g key={p.id}>
+                    <circle
+                      cx={node.pos[0] - 1.5 + idx * 1.5}
+                      cy={node.pos[1] + 3}
+                      r="1"
+                      fill={playerColor}
+                      stroke={isCurrentPlayer ? "#fff" : "none"}
+                      strokeWidth="0.3"
+                      filter={isCurrentPlayer ? "drop-shadow(0 0 2px rgba(168, 85, 247, 0.8))" : "none"}
+                      className="transition-all duration-500"
+                    />
+                    {/* Индикатор игрока */}
+                    <text
+                      x={node.pos[0] - 1.5 + idx * 1.5}
+                      y={node.pos[1] + 3.3}
+                      fontSize="0.8"
+                      fill="#fff"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="font-mono font-bold select-none pointer-events-none"
+                    >
+                      {isCurrentPlayer ? '●' : ''}
+                    </text>
+                  </g>
+                );
+              })}
+
+              {/* Враги (аниматроники) - разные цвета по типу */}
+              {enemies.filter(e => e.currentNode === node.id).map((enemy, idx) => {
+                const enemyColor = ANIMATRONIC_COLORS[enemy.type.toLowerCase()] || ANIMATRONIC_COLORS.default;
+                return (
+                  <g key={enemy.id}>
+                    <circle
+                      cx={node.pos[0] + 2 + idx * 1.5}
+                      cy={node.pos[1] - 2}
+                      r="1.1"
+                      fill={enemyColor}
+                      filter={`drop-shadow(0 0 2px ${enemyColor})`}
+                    >
+                      <animate
+                        attributeName="r"
+                        values="0.9;1.3;0.9"
+                        dur={`${1.5 + Math.random()}s`}
+                        repeatCount="indefinite"
+                      />
+                      <animate
+                        attributeName="opacity"
+                        values="0.7;1;0.7"
+                        dur="2s"
+                        repeatCount="indefinite"
+                      />
+                    </circle>
+                    {/* Первая буква имени */}
+                    <text
+                      x={node.pos[0] + 2 + idx * 1.5}
+                      y={node.pos[1] - 1.8}
+                      fontSize="1"
+                      fill="#fff"
+                      textAnchor="middle"
+                      dominantBaseline="middle"
+                      className="font-mono font-bold select-none pointer-events-none"
+                    >
+                      {enemy.type.charAt(0).toUpperCase()}
+                    </text>
+                  </g>
+                );
+              })}
             </g>
           );
         })}
@@ -367,7 +432,7 @@ export default function GameMap({
 
       {/* Легенда */}
       <div className="absolute bottom-2 left-2 z-10 bg-black/80 px-2 py-1 border border-white/10">
-        <div className="flex items-center gap-3 text-[8px] font-mono text-white/50">
+        <div className="flex items-center gap-2 text-[8px] font-mono text-white/50 flex-wrap">
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-purple-500" />вы
           </span>
@@ -380,6 +445,19 @@ export default function GameMap({
           <span className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-blue-500" />расх.
           </span>
+          <span className="text-white/30">|</span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ANIMATRONIC_COLORS.foxy }} />F
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ANIMATRONIC_COLORS.bonnie }} />B
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ANIMATRONIC_COLORS.chica }} />C
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ANIMATRONIC_COLORS.freddy }} />Fr
+          </span>
         </div>
       </div>
 
@@ -391,17 +469,60 @@ export default function GameMap({
         </div>
       </div>
 
-      {/* Диалог подтверждения перемещения */}
+      {/* Панель подтверждения перемещения - встроенная в UI (не popup) */}
       {pendingMove && (
-        <MoveConfirmDialog
-          targetNode={pendingMove}
-          currentStamina={currentStamina}
-          staminaCost={getMoveCost(pendingMove)}
-          hasEnemyAtTarget={!!getEnemyAtNode(pendingMove.id)}
-          enemyName={getEnemyAtNode(pendingMove.id)?.type}
-          onConfirm={handleConfirmMove}
-          onCancel={handleCancelMove}
-        />
+        <div className="absolute top-10 left-2 right-2 z-20">
+          <div className="bg-zinc-900/95 border border-white/20 rounded-lg p-3 shadow-lg">
+            {/* Информация о перемещении */}
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <span className="text-white/50 font-mono text-xs">→</span>
+                <span className="text-white font-mono text-sm font-bold">
+                  {pendingMove.nameRu}
+                </span>
+                <span className="text-white/40 font-mono text-xs">
+                  [{pendingMove.id}]
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-yellow-400 text-xs">⚡</span>
+                <span className={`font-mono text-xs ${currentStamina >= getMoveCost(pendingMove) ? 'text-yellow-400' : 'text-red-400'}`}>
+                  {getMoveCost(pendingMove)}
+                </span>
+              </div>
+            </div>
+
+            {/* Предупреждение о враге */}
+            {getEnemyAtNode(pendingMove.id) && (
+              <div className="mb-2 px-2 py-1 bg-red-900/30 border border-red-500/30 rounded text-xs text-red-400 font-mono animate-pulse">
+                ⚠ {getEnemyAtNode(pendingMove.id)?.type?.toUpperCase()} в этой локации!
+              </div>
+            )}
+
+            {/* Кнопки */}
+            <div className="flex gap-2">
+              <button
+                onClick={handleCancelMove}
+                className="flex-1 px-3 py-1.5 bg-zinc-700 hover:bg-zinc-600 text-white/70 font-mono text-xs transition-colors border border-zinc-600 rounded"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={handleConfirmMove}
+                disabled={currentStamina < getMoveCost(pendingMove)}
+                className={`
+                  flex-1 px-3 py-1.5 font-mono text-xs font-bold transition-all border rounded
+                  ${currentStamina >= getMoveCost(pendingMove)
+                    ? 'bg-green-600 hover:bg-green-500 text-white border-green-500'
+                    : 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
+                  }
+                `}
+              >
+                Идти
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

@@ -71,6 +71,29 @@ type MoveResponse = {
   loot?: string;
 };
 
+// Определяем тупиковые узлы (с одним соседом)
+const DEAD_END_NODES = ['3', '4', '7', '9'];
+
+// Узлы, из которых можно вернуться (тупики и после достижения Y)
+function canBacktrack(playerData: any, currentNodeId: string, targetNodeId: string): boolean {
+  // Если достигли Y - можно двигаться в любом направлении
+  if (playerData.hasReachedY) return true;
+
+  // Если текущий узел - тупик, можно вернуться
+  if (DEAD_END_NODES.includes(currentNodeId)) return true;
+
+  // Проверяем не идём ли мы назад
+  const visitedNodes = playerData.visitedNodes || [];
+  const lastVisited = visitedNodes[visitedNodes.length - 1];
+
+  // Если целевой узел - предыдущий узел в истории, это возврат
+  if (lastVisited === targetNodeId) {
+    return false; // Запрещаем возврат
+  }
+
+  return true;
+}
+
 export async function movePlayer(
   gameId: string,
   playerId: string,
@@ -98,14 +121,47 @@ export async function movePlayer(
       return { success: false, message: "Movement blocked: No direct path!" };
     }
 
+    // === ПРОВЕРКА ВЗАИМОИСКЛЮЧАЮЩИХ ПУТЕЙ X-1 и X-2 ===
+    if (currentNodeId === 'X') {
+      const chosenBranch = playerData?.chosenBranch;
+
+      // Если уже выбрана ветка, нельзя идти в другую
+      if (chosenBranch === '1' && targetNodeId === '2') {
+        return { success: false, message: "Путь заблокирован! Вы уже выбрали маршрут через Сцену." };
+      }
+      if (chosenBranch === '2' && targetNodeId === '1') {
+        return { success: false, message: "Путь заблокирован! Вы уже выбрали маршрут через Столовую." };
+      }
+    }
+
+    // === ПРОВЕРКА ВОЗВРАТА НАЗАД ===
+    if (!canBacktrack(playerData, currentNodeId, targetNodeId)) {
+      return { success: false, message: "Нельзя возвращаться назад! (кроме тупиков и после достижения офиса)" };
+    }
+
+    // Определяем выбранную ветку при первом движении из X
+    let newChosenBranch = playerData?.chosenBranch;
+    if (currentNodeId === 'X' && (targetNodeId === '1' || targetNodeId === '2')) {
+      newChosenBranch = targetNodeId;
+    }
+
+    // Проверяем достижение Y
+    const hasReachedY = playerData?.hasReachedY || targetNodeId === 'Y';
+
+    // Обновляем историю посещений
+    const visitedNodes = playerData?.visitedNodes || [];
+    const updatedVisitedNodes = [...visitedNodes, currentNodeId];
+
     // RNG события
-    const roll = Math.random();
     let status = "IDLE";
 
     // Обновление игрока
     await playerRef.update({
       currentNode: targetNodeId,
       status: status,
+      chosenBranch: newChosenBranch,
+      hasReachedY: hasReachedY,
+      visitedNodes: updatedVisitedNodes,
       lastUpdated: FieldValue.serverTimestamp()
     });
 
@@ -143,6 +199,7 @@ export async function movePlayer(
   }
 }
 
+// Старая функция для совместимости
 export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | null) {
   if (!dbAdmin) {
     return { success: false, message: 'Firebase not configured' };
@@ -157,12 +214,56 @@ export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | 
       if (doc.exists) return { success: true, playerId: savedPlayerId };
     }
 
-    // Создаем нового игрока
-    const newPlayerRef = playersRef.doc();
-    const newId = newPlayerRef.id;
+    // Для нового игрока возвращаем флаг необходимости выбора слота
+    return { success: false, needsSlotSelection: true };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: "Failed to check player" };
+  }
+}
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// FIXED PLAYER SLOTS - Система фиксированных 6 игроков
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Получить занятые слоты
+export async function getTakenPlayerSlots(gameId: string) {
+  if (!dbAdmin) {
+    return { success: false, takenSlots: [], message: 'Firebase not configured' };
+  }
+
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+    const playersSnap = await playersRef.get();
+
+    const takenSlots = playersSnap.docs.map(doc => doc.id);
+
+    return { success: true, takenSlots };
+  } catch (e) {
+    console.error(e);
+    return { success: false, takenSlots: [], message: 'Failed to get player slots' };
+  }
+}
+
+// Создать игрока в конкретном слоте
+export async function createPlayerInSlot(gameId: string, slotId: string, playerName: string) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+
+    // Проверяем, не занят ли уже этот слот
+    const existingDoc = await playersRef.doc(slotId).get();
+    if (existingDoc.exists) {
+      return { success: false, message: 'Этот слот уже занят другим игроком!' };
+    }
+
+    // Создаем игрока с фиксированным ID
     const startData = {
-      id: newId,
+      id: slotId,
+      name: playerName,
       currentNode: "SF",
       status: "IDLE",
       stats: {
@@ -172,14 +273,19 @@ export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | 
         maxStamina: 7,
         stealth: 3,
       },
-      inventory: ["flashlight"]
+      inventory: ["flashlight"],
+      // Поля для отслеживания пути
+      chosenBranch: null,
+      hasReachedY: false,
+      visitedNodes: []
     };
 
-    await newPlayerRef.set(startData);
-    return { success: true, playerId: newId };
+    await playersRef.doc(slotId).set(startData);
+
+    return { success: true, playerId: slotId };
   } catch (e) {
     console.error(e);
-    return { success: false, message: "Failed to initialize player" };
+    return { success: false, message: "Failed to create player" };
   }
 }
 
@@ -332,9 +438,97 @@ export async function lootLocation(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// TURN ACTIONS - Новый ход
+// TURN ACTIONS - Одновременные ходы для всех игроков
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Проверка: все ли игроки истратили выносливость
+export async function checkAllPlayersExhausted(gameId: string) {
+  if (!dbAdmin) {
+    return { allExhausted: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+    const playersSnap = await playersRef.get();
+
+    if (playersSnap.empty) {
+      return { allExhausted: false, message: 'No players found' };
+    }
+
+    // Проверяем, что у всех активных игроков stamina === 0
+    const allExhausted = playersSnap.docs.every(doc => {
+      const data = doc.data();
+      // Игнорируем мёртвых игроков
+      if (data.status === 'DEAD') return true;
+      return (data.stats?.stamina || 0) === 0;
+    });
+
+    return { allExhausted, playerCount: playersSnap.docs.length };
+  } catch (e) {
+    console.error(e);
+    return { allExhausted: false, message: 'Error checking players' };
+  }
+}
+
+// Запуск нового хода для ВСЕХ игроков одновременно
+export async function startNewTurnForAll(gameId: string) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+    const playersSnap = await playersRef.get();
+
+    if (playersSnap.empty) {
+      return { success: false, message: 'No players found' };
+    }
+
+    const results: { playerId: string; newStamina: number; diceRoll: number }[] = [];
+
+    // Восстанавливаем выносливость для всех игроков
+    const updatePromises = playersSnap.docs.map(async (doc) => {
+      const playerData = doc.data();
+
+      // Пропускаем мёртвых игроков
+      if (playerData.status === 'DEAD') {
+        return;
+      }
+
+      const maxStamina = playerData.stats?.maxStamina || 7;
+
+      // Восстановление выносливости: 1 + d6
+      const diceRoll = Math.floor(Math.random() * 6) + 1;
+      const staminaGain = 1 + diceRoll;
+      const newStamina = Math.min(maxStamina, staminaGain); // Начинаем с 0, так что просто staminaGain
+
+      await doc.ref.update({
+        'stats.stamina': newStamina,
+        lastUpdated: FieldValue.serverTimestamp()
+      });
+
+      results.push({
+        playerId: doc.id,
+        newStamina,
+        diceRoll
+      });
+    });
+
+    await Promise.all(updatePromises);
+
+    revalidatePath('/');
+    return {
+      success: true,
+      message: 'Новый ход начался для всех игроков!',
+      playerResults: results
+    };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: 'Failed to start new turn' };
+  }
+}
+
+// Старый метод для совместимости
 export async function newTurn(
   gameId: string,
   playerId: string
