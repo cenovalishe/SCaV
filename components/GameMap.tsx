@@ -129,14 +129,29 @@ export default function GameMap({ currentNodeId, gameId, playerId, allPlayers = 
 				/>
 			  ))}
 
-			  {/* Индикатор врага */}
+			  {/* Индикатор врага (внутри цикла MAP_NODES_DATA.map) */}
 			  {enemyInNode && (
-				<circle
-				  cx={node.pos[0] + 1.5} cy={node.pos[1] - 1.5}
-				  r="1"
+			    <circle
+				  cx={node.pos[0] + 1.8} // Чуть сместим от центра узла
+				  cy={node.pos[1] - 1.8}
+				  r="0.9"
 				  fill="#ef4444"
-				  className="animate-bounce"
-				/>
+				  filter="drop-shadow(0 0 1px rgba(239, 68, 68, 0.5))"
+			    >
+				  {/* Кастомная мягкая анимация "дыхания" вместо бешеного прыжка */}
+				  <animate
+				    attributeName="r"
+				    values="0.7;1.1;0.7"
+				    dur={`${1.5 + Math.random()}s`} // Рандомная длительность, чтобы враги не мигали синхронно
+				    repeatCount="indefinite"
+				  />
+				  <animate
+				    attributeName="opacity"
+				    values="0.6;1;0.6"
+				    dur="2s"
+				    repeatCount="indefinite"
+				  />
+			    </circle>
 			  )}
 			</g>
 		  );
