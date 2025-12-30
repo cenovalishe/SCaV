@@ -62,7 +62,12 @@ export type PlayerState = {
   id: string;
   currentNode: string;
   status: "IDLE" | "MOVING" | "IN_COMBAT" | "DEAD";
-  stats: { hp: number; san: number };
+  stats: { 
+    hp: number; 
+    san: number;
+    stamina: number;     // <--- Добавлено поле
+    maxStamina: number;  // <--- Добавлено поле
+  };
   inventory: string[];
 };
 
