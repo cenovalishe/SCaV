@@ -3,6 +3,13 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+  if (!dbAdmin) {
+    return NextResponse.json(
+      { error: "Firebase not configured - set FIREBASE_* environment variables" },
+      { status: 503 }
+    );
+  }
+
   const gameId = 'game_alpha';
   const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
 
@@ -15,7 +22,7 @@ export async function GET() {
 
   try {
     const batch = dbAdmin.batch();
-    
+
     initialEnemies.forEach((enemy) => {
       const docRef = enemiesRef.doc(enemy.id);
       batch.set(docRef, enemy);
