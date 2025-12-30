@@ -1,7 +1,9 @@
 'use client'
 
-// 1. ВАЖНО: Импортируем useState
-import { useState } from 'react';
+// 1. Объединяем все импорты React в одну строку
+import { useState, useEffect } from 'react';
+
+// 2. Остальные импорты компонентов
 import MapNode from '@/components/MapNode';
 import { MAP_NODES } from '@/lib/gameConfig';
 import { useGame } from '@/hooks/useGame';
@@ -9,8 +11,10 @@ import SecurityCamera from '@/components/SecurityCamera';
 import Inventory from '@/components/Inventory';
 import CombatEncounter from '@/components/CombatEncounter';
 import GameMap from '@/components/GameMap';
-import { useEffect, useState } from 'react';
+
+// 3. Импорты действий
 import { getOrCreatePlayer } from '@/app/actions/gameActions';
+
 
 
 // 2. Картинки объявляем вне компонента (статика), исправлена скобка
