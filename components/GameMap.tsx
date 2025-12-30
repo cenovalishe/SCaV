@@ -12,24 +12,26 @@ interface GameMapProps {
 }
 
 export default function GameMap({ currentNodeId, gameId, playerId, enemies }: GameMapProps) {
-  // Находим текущий узел для определения соседей
+  // 1. Находим текущий узел и его соседей
   const currentNode = MAP_NODES_DATA.find(n => n.id === currentNodeId);
   const neighbors = currentNode?.neighbors || [];
-  const [optimisticNode, setOptimisticNode] = useState<string | null>(null);
-  
+
+  // 2. ФУНКЦИЯ ОБРАБОТКИ КЛИКА (ДОЛЖНА БЫТЬ ОДНА)
   const handleNodeClick = async (nodeId: string) => {
-	if (!neighbors.includes(nodeId)) return;
-	setOptimisticNode(nodeId); // Мгновенно "передвигаем" фишку
-	const res = await movePlayer(gameId, playerId, nodeId);
-	  
-	if (!res.success) {
-	  setOptimisticNode(null); // Откатываем, если сервер запретил
-	  alert(res.message);
-	}
-  };
-  const handleNodeClick = async (nodeId: string) => {
-    if (!neighbors.includes(nodeId)) return;
-    await movePlayer(gameId, playerId, nodeId);
+    // Проверяем, является ли узел соседом текущего
+    if (!neighbors.includes(nodeId)) {
+        console.log("Движение невозможно: узлы не связаны");
+        return;
+    }
+
+    try {
+      const res = await movePlayer(gameId, playerId, nodeId);
+      if (res && !res.success) {
+        alert(res.message);
+      }
+    } catch (error) {
+      console.error("Ошибка при перемещении:", error);
+    }
   };
 
   return (
@@ -87,7 +89,6 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
                 strokeWidth="0.2"
                 className={isNeighbor ? "animate-pulse" : ""}
               />
-              {/* Метка узла */}
               <text
                 x={node.pos[0]} y={node.pos[1] - 3}
                 fontSize="1.5"
@@ -97,8 +98,6 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
               >
                 {node.id}
               </text>
-
-              {/* Индикатор врага */}
               {enemyInNode && (
                 <circle
                   cx={node.pos[0] + 1.5} cy={node.pos[1] - 1.5}
@@ -111,14 +110,6 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
           );
         })}
       </svg>
-      
-      {/* Наложение HUD для атмосферы */}
-      <div className="absolute top-2 right-4 pointer-events-none">
-        <div className="text-[10px] font-mono text-green-500/50 uppercase tracking-tighter">
-          Neural-Link Map v1.0.4<br/>
-          Facility: Fazbear Pizza
-        </div>
-      </div>
     </div>
   );
 }
