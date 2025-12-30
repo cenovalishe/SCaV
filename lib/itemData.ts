@@ -1,3 +1,75 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FILE MANIFEST: lib/itemData.ts
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * PURPOSE: База данных игровых предметов - расходники, ценности, оружие
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ EXPORTS OVERVIEW                                                            │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ CONSTANTS:                                                                  │
+ * │   ITEMS              - Record<string, Item> - база из 40+ предметов        │
+ * │                                                                             │
+ * │ FUNCTIONS:                                                                  │
+ * │   getItemById(id)              → Item | undefined                          │
+ * │   calculateTotalValue(itemIds) → number (сумма в рублях)                   │
+ * │   formatRoubles(value)         → string (форматированная сумма)            │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ DEPENDENCY GRAPH                                                            │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ IMPORTS FROM:                                                               │
+ * │   ./types → Item                                                           │
+ * │                                                                             │
+ * │ IMPORTED BY:                                                                │
+ * │   components/InventoryTab.tsx → getItemById, formatRoubles                 │
+ * │   components/InfoTab.tsx      → getItemById, ITEMS                         │
+ * │   hooks/useGame.ts            → getItemById, calculateTotalValue           │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ ITEM CATEGORIES                                                             │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │ CONSUMABLE (расходники) - используются для восстановления статов           │
+ * │   medkit, bandage, pills, food, soda, adrenaline, pizza, cupcake           │
+ * │   Эффекты: hp, stamina, speed                                              │
+ * │                                                                             │
+ * │ VALUABLE (ценности) - основной источник рублей при экстракте               │
+ * │   LEGENDARY (50k+): golden_freddy, purple_guy_note                         │
+ * │   RARE (15k-35k): golden_cupcake, foxy_plush, treasure_map, old_tape       │
+ * │   COMMON (1k-12k): security_badge, tablet, phone, microphone, guitar       │
+ * │   JUNK (<1k): napkin, coin, balloon, soap, poster, newspaper               │
+ * │                                                                             │
+ * │ EQUIPMENT (снаряжение) - активные предметы                                 │
+ * │   flashlight, wrench                                                       │
+ * │                                                                             │
+ * │ WEAPON (оружие) - боевые предметы                                          │
+ * │   knife, pan                                                               │
+ * │                                                                             │
+ * │ KEY (ключи) - открывают двери/локации                                      │
+ * │   key_card                                                                 │
+ * │                                                                             │
+ * │ STACKABLE предметы: batteries, spare_parts, napkin, coin, toilet_paper     │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ VALUE TIERS (для баланса)                                                   │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │   100k₽  - purple_guy_note (уникальный)                                    │
+ * │   50k₽   - golden_freddy                                                   │
+ * │   25-35k - golden_cupcake, foxy_plush                                      │
+ * │   15-20k - treasure_map, old_tape, secret_note                             │
+ * │   5-12k  - tablet, security_badge, key_card, phone, hook, guitar           │
+ * │   1-5k   - medkit, adrenaline, microphone, knife, flashlight               │
+ * │   <1k    - bandage, food, soda, napkin, coin, etc                          │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 import { Item } from './types';
 
 // База предметов игры
