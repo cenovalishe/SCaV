@@ -78,40 +78,26 @@ export default function GameBoard() {
       <h1 className="text-2xl mb-8 mt-4 text-gray-500 tracking-widest">SECTOR MAP</h1>
 
       {/* --- MAP --- */}
-      <div className="grid grid-cols-3 gap-12 mb-12">
-        {Object.values(MAP_NODES).map((node) => {
-          const isCurrent = node.id === player.currentNode;
-          const isNeighbor = currentNodeConfig?.neighbors.includes(node.id);
-          const isVisible = isCurrent || isNeighbor;
-          const enemyHere = enemies.find(e => e.currentNode === node.id);
+      <div className="flex flex-col lg:flex-row gap-8 items-start justify-center w-full max-w-7xl">
+  
+		  {/* Левая колонка: Карта */}
+		  <div className="flex-1 w-full flex justify-center">
+			<GameMap 
+			  gameId={GAME_ID}
+			  playerId={PLAYER_ID}
+			  currentNodeId={player.currentNode}
+			  enemies={enemies}
+			/>
+		  </div>
 
-          return (
-            <div key={node.id} className="relative">
-              {isVisible ? (
-                <>
-                  <MapNode
-                    nodeId={node.id}
-                    label={node.label}
-                    isCurrent={isCurrent}
-                    isNeighbor={isNeighbor}
-                    gameId={GAME_ID}
-                    playerId={PLAYER_ID}
-                  />
-                  {enemyHere && (
-                    <div className="absolute -top-2 -right-2 w-6 h-6 bg-red-600 rounded-full animate-bounce border-2 border-white flex items-center justify-center font-bold text-xs z-20">
-                      !
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="w-24 h-24 rounded-full border-2 border-gray-800 bg-black/50 flex items-center justify-center text-gray-900 text-2xl font-bold">
-                  ?
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+		  {/* Правая колонка: Камеры и Статы */}
+		  <div className="w-full lg:w-80 flex flex-col gap-4">
+			<div className="bg-zinc-900 p-4 border border-white/10 rounded">
+				{/* Твой компонент Stats и Inventory */}
+			</div>
+			{/* Камеры */}
+		  </div>
+		</div>
 
       {/* --- SURVEILLANCE SYSTEM (CAMERAS) --- */}
       <div className="w-full max-w-5xl border-t border-gray-800 pt-8 pb-20">

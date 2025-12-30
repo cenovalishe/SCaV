@@ -1,60 +1,49 @@
 'use server'
 
-import { dbAdmin } from '@/lib/firebaseAdmin'; // Напишем этот хелпер ниже
-import { MAP_NODES } from '@/lib/gameConfig';
+import { dbAdmin } from '@/lib/firebaseAdmin';
+import { MAP_NODES_DATA } from '@/lib/mapData'; // Импортируем новые данные
 import { revalidatePath } from 'next/cache';
 
-// Типы ответа для клиента
-type MoveResult = {
-  success: boolean;
-  message: string;
-  event?: string; // "LOOT_FOUND", "ENEMY_ENCOUNTER", "NOTHING"
-  loot?: string;
-};
-
-export async function movePlayer(gameId: string, playerId: string, targetNodeId: string): Promise<MoveResult> {
+export async function movePlayer(gameId: string, playerId: string, targetNodeId: string) {
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
     const playerSnap = await playerRef.get();
-
     if (!playerSnap.exists) throw new Error('Player not found');
 
     const playerData = playerSnap.data();
     const currentNodeId = playerData?.currentNode;
 
-    // 1. Валидация: Можно ли пройти в этот узел?
-    const currentNodeConfig = MAP_NODES[currentNodeId as keyof typeof MAP_NODES];
+    // --- НОВАЯ ЛОГИКА ВАЛИДАЦИИ ---
+    // 1. Находим конфиг текущего узла в массиве
+    const nodeConfig = MAP_NODES_DATA.find(n => n.id === currentNodeId);
     
-    if (!currentNodeConfig.neighbors.includes(targetNodeId)) {
-      return { success: false, message: "Too far away or not connected!" };
+    // 2. Проверяем, есть ли targetNodeId в списке соседей (neighbors)
+    if (!nodeConfig || !nodeConfig.neighbors.includes(targetNodeId)) {
+      return { success: false, message: "Movement blocked: No direct path!" };
     }
 
-    // 2. RNG (Генерация события)
-    // Шанс: 30% Лут, 20% Враг, 50% Пусто
+    // --- RNG СОБЫТИЯ (Оставляем как было или усложняем) ---
     const roll = Math.random();
-    let event = "NOTHING";
-    let loot = undefined;
-
-    if (roll < 0.3) {
-      event = "LOOT_FOUND";
-      loot = "Medical Kit"; // Здесь можно сделать сложную таблицу лута
-      // TODO: Добавить лут в инвентарь игрока в БД
-    } else if (roll < 0.5) {
-      event = "ENEMY_ENCOUNTER";
-      // TODO: Поменять статус игрока на IN_COMBAT
+    let status = "IDLE";
+    
+    // Проверка на столкновение с врагом (серверная часть)
+    const enemiesSnap = await dbAdmin.collection('games').doc(gameId).collection('enemies')
+      .where('currentNode', '==', targetNodeId).get();
+    
+    if (!enemiesSnap.empty) {
+      status = "IN_COMBAT";
     }
 
-    // 3. Обновление БД
+    // 3. Обновление
     await playerRef.update({
       currentNode: targetNodeId,
-      status: event === "ENEMY_ENCOUNTER" ? "IN_COMBAT" : "IDLE"
+      status: status,
+      lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/'); // Обновляем данные на клиенте
-    return { success: true, message: `Moved to ${targetNodeId}`, event, loot };
-
-  } catch (error) {
-    console.error(error);
-    return { success: false, message: "Server Error" };
+    revalidatePath('/');
+    return { success: true };
+  } catch (e) {
+    return { success: false, message: "Error" };
   }
 }
