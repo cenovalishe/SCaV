@@ -69,7 +69,7 @@
 'use client'
 
 import React from 'react';
-import { MAP_ROOMS, MAP_NODES_DATA, DANGER_COLORS, MapNodeData } from '@/lib/mapData';
+import { MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS, DANGER_COLORS, MapNodeData } from '@/lib/mapData';
 import { movePlayer } from '@/app/actions/gameActions';
 
 interface GameMapProps {
@@ -145,6 +145,45 @@ export default function GameMap({
             </text>
           </g>
         ))}
+
+        {/* Слой 0.5: Дверные проёмы (joints) */}
+        {MAP_JOINTS.map((joint, idx) => {
+          // Определяем цвет и стиль в зависимости от типа прохода
+          let strokeColor = '#000'; // Чёрный для "вырезания" в стенах
+          let strokeWidth = joint.width * 0.15;
+          let strokeDasharray = '0';
+
+          if (joint.type === 'CURTAIN_OPENING') {
+            strokeColor = '#7c3aed'; // Фиолетовый для занавесок
+            strokeDasharray = '0.5 0.3';
+          } else if (joint.type === 'DOOR_HIDDEN') {
+            strokeColor = '#1f1f1f'; // Тёмно-серый для скрытых дверей
+          } else if (joint.type === 'OPENING') {
+            strokeColor = '#000';
+            strokeWidth = joint.width * 0.12;
+          }
+
+          // Рисуем линию прохода (вырез в стене)
+          const halfWidth = joint.width / 2;
+          const x1 = joint.axis === 'X' ? joint.pos[0] - halfWidth : joint.pos[0];
+          const y1 = joint.axis === 'Y' ? joint.pos[1] - halfWidth : joint.pos[1];
+          const x2 = joint.axis === 'X' ? joint.pos[0] + halfWidth : joint.pos[0];
+          const y2 = joint.axis === 'Y' ? joint.pos[1] + halfWidth : joint.pos[1];
+
+          return (
+            <line
+              key={`joint-${idx}`}
+              x1={x1}
+              y1={y1}
+              x2={x2}
+              y2={y2}
+              stroke={strokeColor}
+              strokeWidth={strokeWidth}
+              strokeDasharray={strokeDasharray}
+              strokeLinecap="round"
+            />
+          );
+        })}
 
         {/* Слой 1: Пути */}
         {MAP_NODES_DATA.map(node =>
