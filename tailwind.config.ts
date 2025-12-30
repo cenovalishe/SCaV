@@ -20,12 +20,12 @@ const config: Config = {
         pan: {
           '0%, 100%': { transform: 'translateX(0)' },
           '50%': { transform: 'translateX(-10%)' }, // Движение влево-вправо
-        }
+        },
 		
 		shake: {
-      '0%, 100%': { transform: 'translateX(0)' },
-      '25%': { transform: 'translateX(-5px)' },
-      '75%': { transform: 'translateX(5px)' },
+		  '0%, 100%': { transform: 'translateX(0)' },
+		  '25%': { transform: 'translateX(-5px)' },
+		  '75%': { transform: 'translateX(5px)' },
 	  
       },
       animation: {

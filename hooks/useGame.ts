@@ -17,6 +17,8 @@ export type EnemyState = {
   id: string;
   currentNode: string;
   type: string;
+  hp: number; // <--- ДОБАВЬ ЭТУ СТРОКУ
+  aggroRadius?: number; // Можно добавить и это на будущее
 };
 
 export function useGame(gameId: string, playerId: string) {
