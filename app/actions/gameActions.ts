@@ -3,6 +3,7 @@
 import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA } from '@/lib/mapData'; // Импортируем новые данные
 import { revalidatePath } from 'next/cache';
+import { FieldValue } from 'firebase-admin/firestore';
 
 export async function movePlayer(gameId: string, playerId: string, targetNodeId: string) {
   try {
