@@ -148,9 +148,8 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as (keyof CharacterStats)[]).map((statKey) => {
+          {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as const).map((statKey) => {
             const label = STAT_LABELS[statKey];
-            if (!label) return null;
             const value = stats[statKey];
 
             return (
