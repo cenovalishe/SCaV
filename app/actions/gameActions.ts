@@ -170,6 +170,7 @@ export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | 
         san: 100,
         stamina: 7,
         maxStamina: 7
+        stealth: 3,
       },
       inventory: ["flashlight"]
     };
