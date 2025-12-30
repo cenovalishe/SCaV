@@ -30,9 +30,18 @@
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 
+export type WheelActionType = 'confirm' | 'respin' | 'retreat';
+
+export interface WheelResult {
+  damage: number;
+  action: WheelActionType;
+  totalDamage: number; // Итоговый урон с учётом штрафов
+}
+
 interface WheelRandomizerProps {
-  onResult: (value: number) => void;
+  onResult: (result: WheelResult) => void;
   title?: string;
+  onStaminaReset?: () => void; // Колбэк для обнуления выносливости
 }
 
 // Взвешенные значения (вес по убыванию)
@@ -93,14 +102,22 @@ function getAngleForValue(value: number): number {
   return (segment.startAngle + segment.endAngle) / 2;
 }
 
+// Штрафы за действия
+const RESPIN_DAMAGE = 5; // Урон за перекрут
+const RETREAT_DAMAGE = 15; // Урон за отступление
+
 export default function WheelRandomizer({
   onResult,
-  title = 'УРОН'
+  title = 'УРОН',
+  onStaminaReset
 }: WheelRandomizerProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
   const [targetValue, setTargetValue] = useState<number | null>(null);
   const [showResult, setShowResult] = useState(false);
+  const [showActions, setShowActions] = useState(false); // Показать выбор действий
+  const [accumulatedDamage, setAccumulatedDamage] = useState(0); // Накопленный урон от перекрутов
+  const [respinCount, setRespinCount] = useState(0); // Количество перекрутов
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const segments = getWheelSegments();
@@ -192,16 +209,50 @@ export default function WheelRandomizer({
       setIsSpinning(false);
       setShowResult(true);
 
-      // Вызов onResult через задержку для показа результата
-      if (targetValue !== null) {
-        setTimeout(() => {
-          onResult(targetValue);
-        }, 2000);
+      // Обнуляем выносливость при выпадении результата
+      if (onStaminaReset) {
+        onStaminaReset();
       }
+
+      // Показываем кнопки действий через небольшую задержку
+      setTimeout(() => {
+        setShowActions(true);
+      }, 1500);
     }, 4000); // Длительность анимации вращения
 
     return () => clearTimeout(timeout);
-  }, [isSpinning, targetValue, onResult]);
+  }, [isSpinning, onStaminaReset]);
+
+  // Обработка выбора действия
+  const handleAction = useCallback((action: WheelActionType) => {
+    if (targetValue === null) return;
+
+    let totalDamage = targetValue;
+
+    if (action === 'confirm') {
+      // Принимаем урон от колеса + накопленный от перекрутов
+      totalDamage = targetValue + accumulatedDamage;
+    } else if (action === 'respin') {
+      // Добавляем штраф за перекрут и крутим снова
+      setAccumulatedDamage(prev => prev + RESPIN_DAMAGE);
+      setRespinCount(prev => prev + 1);
+      setShowActions(false);
+      setShowResult(false);
+      setTargetValue(null);
+      // Крутим снова автоматически
+      setTimeout(() => handleSpin(), 500);
+      return;
+    } else if (action === 'retreat') {
+      // Отступление с большим уроном
+      totalDamage = RETREAT_DAMAGE + accumulatedDamage;
+    }
+
+    onResult({
+      damage: targetValue,
+      action,
+      totalDamage
+    });
+  }, [targetValue, accumulatedDamage, onResult]);
 
   const resultColor = targetValue !== null
     ? WHEEL_VALUES.find(v => v.value === targetValue)?.color || '#fff'
@@ -275,13 +326,53 @@ export default function WheelRandomizer({
             >
               {targetValue}
             </div>
+            {accumulatedDamage > 0 && (
+              <div className="text-orange-400 font-mono text-sm mt-1">
+                +{accumulatedDamage} (штраф за перекруты)
+              </div>
+            )}
             <div className="text-white/40 font-mono text-sm mt-2">
-              урона получено
+              {!showActions ? 'Ожидание выбора...' : 'Выберите действие'}
             </div>
           </div>
         )}
 
-        {/* Кнопка */}
+        {/* Кнопки действий после выпадения результата */}
+        {showActions && targetValue !== null && (
+          <div className="flex flex-col gap-3 mt-4 w-full max-w-sm">
+            {/* Подтвердить */}
+            <button
+              onClick={() => handleAction('confirm')}
+              className="w-full px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-500 hover:to-green-600 text-white font-bold font-mono uppercase tracking-wider transition-all duration-200 border border-green-400/50 hover:border-green-300 rounded-lg shadow-lg"
+            >
+              ✓ Подтвердить ({targetValue + accumulatedDamage} урона)
+            </button>
+
+            {/* Перекрутить */}
+            <button
+              onClick={() => handleAction('respin')}
+              className="w-full px-6 py-3 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-500 hover:to-orange-500 text-white font-bold font-mono uppercase tracking-wider transition-all duration-200 border border-yellow-400/50 hover:border-orange-300 rounded-lg shadow-lg"
+            >
+              🎰 Перекрутить (+{RESPIN_DAMAGE} урона)
+            </button>
+
+            {/* Отступить */}
+            <button
+              onClick={() => handleAction('retreat')}
+              className="w-full px-6 py-3 bg-gradient-to-r from-red-700 to-red-800 hover:from-red-600 hover:to-red-700 text-white font-bold font-mono uppercase tracking-wider transition-all duration-200 border border-red-400/50 hover:border-red-300 rounded-lg shadow-lg"
+            >
+              ← Отступить ({RETREAT_DAMAGE + accumulatedDamage} урона)
+            </button>
+
+            {respinCount > 0 && (
+              <div className="text-yellow-400/70 font-mono text-xs text-center mt-2">
+                Перекрутов: {respinCount} | Накопленный штраф: {accumulatedDamage}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Кнопка первого запуска */}
         {!isSpinning && !showResult && (
           <button
             onClick={handleSpin}

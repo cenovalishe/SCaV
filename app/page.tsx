@@ -41,9 +41,9 @@
 
 'use client'
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation } from '@/app/actions/gameActions';
+import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot } from '@/app/actions/gameActions';
 import { MAP_NODES_DATA, MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 
@@ -54,6 +54,7 @@ import CameraView from '@/components/CameraView';
 import CombatEncounter from '@/components/CombatEncounter';
 import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
 import ActionPanel from '@/components/ActionPanel';
+import PlayerSelection from '@/components/PlayerSelection';
 
 // Дефолтные значения для совместимости
 const DEFAULT_STATS: CharacterStats = {
@@ -105,6 +106,10 @@ export default function GameBoard() {
   const [selectedNode, setSelectedNode] = useState<MapNodeData | null>(null);
   const [gameLog, setGameLog] = useState<GameLogEntry[]>([]);
 
+  // Состояние выбора игрока
+  const [needsSlotSelection, setNeedsSlotSelection] = useState(false);
+  const [takenSlots, setTakenSlots] = useState<string[]>([]);
+
   // Состояние встречи с аниматроником
   const [encounter, setEncounter] = useState<{
     active: boolean;
@@ -112,10 +117,20 @@ export default function GameBoard() {
     enemyType: string;
     pendingMove: MapNodeData | null;
     staminaCost: number;
+    previousNode: string | null; // Для отступления
   } | null>(null);
 
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
+
+  // Функция добавления записи в лог (определена здесь для доступа в init)
+  const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
+    setGameLog(prev => [...prev, {
+      timestamp: Date.now(),
+      message,
+      type
+    }].slice(-50)); // Храним последние 50 записей
+  }, []);
 
   // Инициализация игрока
   useEffect(() => {
@@ -124,15 +139,40 @@ export default function GameBoard() {
       const result = await getOrCreatePlayer(GAME_ID, savedId);
 
       if (result.success && result.playerId) {
+        // Существующий игрок найден
         localStorage.setItem('scav_player_id', result.playerId);
         setPlayerId(result.playerId);
-
-        // Добавляем запись в лог
         addLogEntry('Подключение к системе...', 'system');
+      } else if ((result as any).needsSlotSelection) {
+        // Нужно выбрать слот
+        const slotsResult = await getTakenPlayerSlots(GAME_ID);
+        if (slotsResult.success) {
+          setTakenSlots(slotsResult.takenSlots);
+        }
+        setNeedsSlotSelection(true);
       }
     }
     init();
-  }, []);
+  }, [addLogEntry]);
+
+  // Обработчик выбора игрока
+  const handleSelectPlayer = useCallback(async (slotId: string, playerName: string) => {
+    const result = await createPlayerInSlot(GAME_ID, slotId, playerName);
+
+    if (result.success && result.playerId) {
+      localStorage.setItem('scav_player_id', result.playerId);
+      setPlayerId(result.playerId);
+      setNeedsSlotSelection(false);
+      addLogEntry(`Добро пожаловать, ${playerName}!`, 'system');
+    } else {
+      // Слот уже занят, обновляем список
+      const slotsResult = await getTakenPlayerSlots(GAME_ID);
+      if (slotsResult.success) {
+        setTakenSlots(slotsResult.takenSlots);
+      }
+      alert(result.message || 'Ошибка при создании игрока');
+    }
+  }, [addLogEntry]);
 
   // Хук игры
   const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
@@ -140,14 +180,34 @@ export default function GameBoard() {
   // Определяем текущего врага для боя
   const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
 
-  // Функция добавления записи в лог
-  const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
-    setGameLog(prev => [...prev, {
-      timestamp: Date.now(),
-      message,
-      type
-    }].slice(-50)); // Храним последние 50 записей
-  }, []);
+  // Ref для предотвращения дублирования проверки хода
+  const isCheckingTurn = useRef(false);
+
+  // Проверка одновременных ходов - если все игроки истратили выносливость, начинаем новый ход
+  useEffect(() => {
+    if (!playerId || loading || allPlayers.length === 0) return;
+    if (isCheckingTurn.current) return;
+
+    // Проверяем, если у всех игроков выносливость 0
+    const allExhausted = allPlayers.every(p => {
+      if (p.status === 'DEAD') return true;
+      return (p.stats?.stamina || 0) === 0;
+    });
+
+    if (allExhausted) {
+      isCheckingTurn.current = true;
+
+      // Запускаем новый ход для всех
+      startNewTurnForAll(GAME_ID).then((result) => {
+        if (result.success) {
+          addLogEntry('🎲 Новый ход! Выносливость восстановлена (1 + d6)', 'system');
+        }
+        isCheckingTurn.current = false;
+      }).catch(() => {
+        isCheckingTurn.current = false;
+      });
+    }
+  }, [playerId, loading, allPlayers, addLogEntry]);
 
   // Получаем данные текущего узла для камеры
   const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
@@ -222,7 +282,8 @@ export default function GameBoard() {
         enemyName: enemyAtTarget.type,
         enemyType: enemyAtTarget.type,
         pendingMove: targetNode,
-        staminaCost
+        staminaCost,
+        previousNode: player.currentNode // Сохраняем текущую позицию для отступления
       });
     } else {
       // Просто перемещаемся
@@ -266,19 +327,34 @@ export default function GameBoard() {
       }
     } else {
       // Получили урон
-      addLogEntry(`${result.animatronicName} нанёс ${result.damageReceived} урона!`, 'combat');
+      const actionText = result.action === 'retreat' ? 'отступил с' :
+                        result.action === 'respin' ? 'перекрутил и получил' : 'получил';
+      addLogEntry(`${result.animatronicName} атакует! Игрок ${actionText} ${result.damageReceived} урона!`, 'combat');
 
       // Применяем урон
       await applyDamage(GAME_ID, playerId, result.damageReceived);
 
-      // Всё равно перемещаемся (получив урон)
-      if (encounter.pendingMove) {
-        await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+      // Если отступление - остаёмся на текущей клетке (не перемещаемся)
+      if (result.retreated) {
+        addLogEntry(`Отступление на предыдущую позицию`, 'move');
+        // Не выполняем перемещение - игрок остаётся где был
+      } else {
+        // Перемещаемся (получив урон)
+        if (encounter.pendingMove) {
+          await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+        }
       }
     }
 
     setEncounter(null);
   }, [encounter, playerId, executeMove, addLogEntry]);
+
+  // Обнуление выносливости при выпадении колеса
+  const handleStaminaReset = useCallback(async () => {
+    if (!playerId) return;
+    await updateStamina(GAME_ID, playerId, -currentStamina); // Обнуляем
+    addLogEntry('Выносливость обнулена!', 'system');
+  }, [playerId, currentStamina, addLogEntry]);
 
   // Обработчик лутинга
   const handleLoot = useCallback(async () => {
@@ -307,11 +383,27 @@ export default function GameBoard() {
     }
   }, [playerId, isLooting, addLogEntry]);
 
-  // Обработчик ожидания
-  const handleWait = useCallback(() => {
-    addLogEntry('Вы ждёте...', 'system');
-    // Можно добавить логику восстановления выносливости или другие эффекты
-  }, [addLogEntry]);
+  // Обработчик ожидания - пропуск хода (обнуляет выносливость)
+  const handleWait = useCallback(async () => {
+    if (!playerId) return;
+
+    addLogEntry('Вы пропускаете ход...', 'system');
+
+    // Обнуляем выносливость (пропуск хода)
+    await updateStamina(GAME_ID, playerId, -currentStamina);
+
+    addLogEntry('Выносливость израсходована. Ожидание нового хода...', 'system');
+  }, [playerId, currentStamina, addLogEntry]);
+
+  // Экран выбора игрока (для новых игроков)
+  if (needsSlotSelection) {
+    return (
+      <PlayerSelection
+        takenSlots={takenSlots}
+        onSelectPlayer={handleSelectPlayer}
+      />
+    );
+  }
 
   // Загрузочный экран
   if (!playerId || loading || !player) {
@@ -341,6 +433,7 @@ export default function GameBoard() {
           animatronicType={encounter.enemyType}
           playerStealth={currentStealth}
           onComplete={handleEncounterComplete}
+          onStaminaReset={handleStaminaReset}
         />
       )}
 

@@ -26,13 +26,15 @@
 
 import React, { useState, useCallback } from 'react';
 import DiceRoll from './DiceRoll';
-import WheelRandomizer from './WheelRandomizer';
+import WheelRandomizer, { WheelResult, WheelActionType } from './WheelRandomizer';
 
 export interface EncounterResult {
   evaded: boolean;          // Уклонился ли игрок
   diceRoll: number;         // Результат броска кубика
   damageReceived: number;   // Полученный урон (0 если уклонился)
   animatronicName: string;
+  action?: WheelActionType; // Выбранное действие (confirm/respin/retreat)
+  retreated?: boolean;      // Игрок отступил на предыдущую клетку
 }
 
 interface EncounterSystemProps {
@@ -40,6 +42,7 @@ interface EncounterSystemProps {
   animatronicType: string;
   playerStealth: number;
   onComplete: (result: EncounterResult) => void;
+  onStaminaReset?: () => void; // Обнуление выносливости при выпадении колеса
 }
 
 type EncounterPhase = 'dice' | 'wheel' | 'result';
@@ -57,7 +60,8 @@ export default function EncounterSystem({
   animatronicName,
   animatronicType,
   playerStealth,
-  onComplete
+  onComplete,
+  onStaminaReset
 }: EncounterSystemProps) {
   const [phase, setPhase] = useState<EncounterPhase>('dice');
   const [diceRollResult, setDiceRollResult] = useState<number | null>(null);
@@ -87,8 +91,8 @@ export default function EncounterSystem({
     }
   }, [animatronicName, onComplete]);
 
-  // Обработка результата колеса
-  const handleWheelResult = useCallback((damage: number) => {
+  // Обработка результата колеса (с выбором действия)
+  const handleWheelResult = useCallback((result: WheelResult) => {
     setPhase('result');
 
     // Небольшая задержка для показа результата, затем завершение
@@ -96,8 +100,10 @@ export default function EncounterSystem({
       onComplete({
         evaded: false,
         diceRoll: diceRollResult || 0,
-        damageReceived: damage,
-        animatronicName
+        damageReceived: result.totalDamage,
+        animatronicName,
+        action: result.action,
+        retreated: result.action === 'retreat'
       });
     }, 500);
   }, [diceRollResult, animatronicName, onComplete]);
@@ -117,6 +123,7 @@ export default function EncounterSystem({
         <WheelRandomizer
           onResult={handleWheelResult}
           title={`${animatronicName} АТАКУЕТ!`}
+          onStaminaReset={onStaminaReset}
         />
       )}
 

@@ -130,16 +130,49 @@ export default function CameraView({ currentNode, nodeId, enemiesHere, playersHe
           />
         ))}
 
-        {/* Отрисовка других игроков */}
-        {playersHere.map((p) => !p.isCurrentPlayer && (
-          <div 
-            key={p.id}
-            className="absolute top-2/3 left-1/3 w-12 h-32 bg-green-500/20 border border-green-500/50 flex items-center justify-center"
-          >
-            <span className="text-[10px] text-green-500 font-mono -mt-6">{p.name}</span>
-          </div>
-        ))}
       </div>
+
+      {/* Список игроков в локации - улучшенный дизайн */}
+      {playersHere.length > 0 && (
+        <div className="absolute bottom-20 left-4 z-20">
+          <div className="bg-zinc-900/90 border border-green-500/30 rounded-lg overflow-hidden min-w-[140px]">
+            {/* Заголовок */}
+            <div className="bg-green-900/50 px-3 py-1 border-b border-green-500/20">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-green-400 font-mono text-xs uppercase tracking-wide">
+                  Игрок
+                </span>
+              </div>
+            </div>
+            {/* Список игроков */}
+            <div className="px-2 py-1 space-y-1">
+              {playersHere.map((p) => (
+                <div
+                  key={p.id}
+                  className={`flex items-center gap-2 px-2 py-1 rounded ${
+                    p.isCurrentPlayer
+                      ? 'bg-purple-900/40 border border-purple-500/30'
+                      : 'bg-zinc-800/50'
+                  }`}
+                >
+                  <div
+                    className={`w-2 h-2 rounded-full ${
+                      p.isCurrentPlayer ? 'bg-purple-500' : 'bg-green-500'
+                    }`}
+                  />
+                  <span className={`font-mono text-xs ${
+                    p.isCurrentPlayer ? 'text-purple-300' : 'text-white/70'
+                  }`}>
+                    {p.name}
+                    {p.isCurrentPlayer && ' (вы)'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── ЭФФЕКТЫ ПОВЕРХ КАМЕРЫ ─── */}
 
