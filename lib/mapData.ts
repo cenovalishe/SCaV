@@ -85,8 +85,7 @@
  * │              D → 8 → G                                                      │
  * │                                                                             │
  * │ CENTER BRANCH (Dining Path):                                                │
- * │   X ─ ─> 2 → G (connects to north branch)                                  │
- * │          2 → A (main junction)                                              │
+ * │   X ─ ─> 2 → A (main junction)                                              │
  * │                                                                             │
  * │ FROM JUNCTION A:                                                            │
  * │   A → 3 (Restrooms, dead end)                                              │
@@ -408,7 +407,7 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     id: "G",
     type: "WAYPOINT",
     pos: [31, 45],
-    neighbors: ["8", "2", "6"],  // From 8 and 2, to 6 (removed D - path comes from 8)
+    neighbors: ["8", "6"],  // From 8, to 6 (path comes from D->8->G)
     roomId: 'R_MAIN',
     nameRu: 'Перекрёсток Г',
     nameEn: 'Junction G',
