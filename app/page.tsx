@@ -7,6 +7,7 @@ import { MAP_NODES } from '@/lib/gameConfig';
 import { useGame } from '@/hooks/useGame';
 import SecurityCamera from '@/components/SecurityCamera';
 import Inventory from '@/components/Inventory';
+import CombatEncounter from '@/components/CombatEncounter';
 
 const GAME_ID = 'game_alpha';
 const PLAYER_ID = 'player_1';
@@ -22,6 +23,8 @@ export default function GameBoard() {
   const [activeCam, setActiveCam] = useState<string | null>("node_04");
   
   const { player, enemies, isCombat, loading } = useGame(GAME_ID, PLAYER_ID);
+  
+  const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
 
   if (loading || !player) return <div className="text-white text-center mt-20">Connecting to Neural Link...</div>;
 
@@ -61,15 +64,16 @@ export default function GameBoard() {
         </div>
       </div>
 	  
-      {/* --- COMBAT OVERLAY --- */}
-      {isCombat && (
-        <div className="fixed inset-0 z-50 bg-red-900/90 flex flex-col items-center justify-center animate-pulse">
-          <h1 className="text-6xl font-black text-white mb-4">ENCOUNTER</h1>
-          <button className="mt-8 px-6 py-3 bg-black border-2 border-red-500 text-red-500 hover:bg-red-800 hover:text-white transition">
-            [ FIGHT ]
-          </button>
-        </div>
+	  {/* --- UI LAYER: Combat Overlay --- */}
+      {isCombat && combatEnemy && (
+        <CombatEncounter 
+          gameId={GAME_ID}
+          playerId={PLAYER_ID}
+          enemyId={combatEnemy.id}
+          enemyHp={combatEnemy.hp}
+        />
       )}
+	 
 
       <h1 className="text-2xl mb-8 mt-4 text-gray-500 tracking-widest">SECTOR MAP</h1>
 
