@@ -74,7 +74,7 @@ export default function GameBoard() {
         </div>
 
         <div className="border-t border-gray-800 pt-2">
-           <Inventory items={player.inventory} gameId={GAME_ID} playerId={PLAYER_ID} />
+           <Inventory items={player.inventory} gameId={GAME_ID} playerId={playerId} />
         </div>
       </div>
 	  
@@ -82,7 +82,7 @@ export default function GameBoard() {
       {isCombat && combatEnemy && (
         <CombatEncounter 
           gameId={GAME_ID}
-          playerId={PLAYER_ID}
+          playerId={playerId}
           enemyId={combatEnemy.id}
           enemyHp={combatEnemy.hp}
         />
