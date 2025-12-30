@@ -1,25 +1,29 @@
-import { NextResponse } from 'next/server';
+// app/api/seed/route.ts
 import { dbAdmin } from '@/lib/firebaseAdmin';
+import { NextResponse } from 'next/server';
 
 export async function GET() {
   const gameId = 'game_alpha';
-  const playerId = 'player_1';
-  
-  // 1. Создаем игрока
-  await dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId).set({
-    nickname: "Survivor",
-    currentNode: "node_01", // Стартовая точка (из конфига MAP_NODES)
-    stats: { hp: 100, san: 100 },
-    status: "IDLE",
-    inventory: []
-  });
+  const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
 
-  // 2. Создаем врага
-  await dbAdmin.collection('games').doc(gameId).collection('enemies').doc('enemy_1').set({
-    type: "Shambler",
-    currentNode: "node_04", // Где-то далеко
-    hp: 50
-  });
+  const initialEnemies = [
+    { id: 'freddy', type: 'Freddy', currentNode: '1', hp: 100, color: '🟤' },
+    { id: 'bonnie', type: 'Bonnie', currentNode: '9', hp: 100, color: '🔵' },
+    { id: 'chica', type: 'Chica', currentNode: '4', hp: 100, color: '🟡' },
+    { id: 'foxy', type: 'Foxy', currentNode: '8', hp: 100, color: '🔴' }
+  ];
 
-  return NextResponse.json({ message: "Database Seeded! Ready to play." });
+  try {
+    const batch = dbAdmin.batch();
+    
+    initialEnemies.forEach((enemy) => {
+      const docRef = enemiesRef.doc(enemy.id);
+      batch.set(docRef, enemy);
+    });
+
+    await batch.commit();
+    return NextResponse.json({ message: "Enemies spawned successfully" });
+  } catch (e) {
+    return NextResponse.json({ error: "Failed to seed enemies" }, { status: 500 });
+  }
 }

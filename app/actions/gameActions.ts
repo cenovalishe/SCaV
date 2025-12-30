@@ -52,22 +52,45 @@ export async function movePlayer(
       status = "IN_COMBAT";
     }
 
-    // 3. Обновление
+// 3. Обновление игрока
     await playerRef.update({
       currentNode: targetNodeId,
       status: status,
       lastUpdated: FieldValue.serverTimestamp()
     });
 
+    // --- НОВОЕ: ЛОГИКА АНИМАТРОНИКОВ ---
+    const enemiesRef = gameRef.collection('enemies');
+    const enemiesSnap = await enemiesRef.get();
+
+    // Создаем массив промисов для параллельного обновления врагов
+    const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
+      const enemyData = enemyDoc.data();
+      
+      // Шанс движения 40%, чтобы они не летали по карте слишком быстро
+      if (Math.random() > 0.6) {
+        const enemyNode = MAP_NODES_DATA.find(n => n.id === enemyData.currentNode);
+        
+        if (enemyNode && enemyNode.neighbors.length > 0) {
+          // Выбираем случайного соседа из конфига графа
+          const nextNode = enemyNode.neighbors[Math.floor(Math.random() * enemyNode.neighbors.length)];
+          
+          return enemyDoc.ref.update({ currentNode: nextNode });
+        }
+      }
+      return Promise.resolve();
+    });
+
+    await Promise.all(enemyMoves);
+
     revalidatePath('/');
-    // В конце функции при успехе:
     return { 
       success: true, 
       message: `Moved to ${targetNodeId}`, 
-      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR",
-      loot: undefined // Можно добавить явно, чтобы избежать undefined ошибок
+      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR" 
     };
   } catch (e) {
+    console.error(e);
     return { success: false, message: "Error" };
   }
 }
