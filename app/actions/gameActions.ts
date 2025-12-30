@@ -53,6 +53,8 @@ export async function movePlayer(
     });
 
     // --- НОВОЕ: ЛОГИКА АНИМАТРОНИКОВ ---
+    // Сначала создаем ссылку на документ игры
+    const gameRef = dbAdmin.collection('games').doc(gameId);
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
