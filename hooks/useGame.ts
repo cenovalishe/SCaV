@@ -1,3 +1,57 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FILE MANIFEST: hooks/useGame.ts
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * PURPOSE: React хук для realtime подписки на состояние игры через Firebase
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ EXPORTS OVERVIEW                                                            │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ TYPES:                                                                      │
+ * │   PlayerState         - Состояние игрока (id, currentNode, status, stats)  │
+ * │   EnemyState          - Состояние врага (id, currentNode, type, hp)        │
+ * │                                                                             │
+ * │ HOOKS:                                                                      │
+ * │   useGame(gameId, playerId)                                                │
+ * │     → { player, allPlayers, enemies, isCombat, loading }                   │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ DEPENDENCY GRAPH                                                            │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ IMPORTS FROM:                                                               │
+ * │   react              → useState, useEffect                                 │
+ * │   firebase/firestore → doc, onSnapshot, collection, query                  │
+ * │   @/lib/firebaseClient → dbClient (клиентский Firestore)                   │
+ * │                                                                             │
+ * │ IMPORTED BY:                                                                │
+ * │   app/page.tsx       → основной хук для состояния игры                     │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ FIREBASE SUBSCRIPTIONS                                                      │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │                                                                             │
+ * │   PLAYERS COLLECTION:                                                       │
+ * │     Path: games/{gameId}/players                                           │
+ * │     onSnapshot → updates allPlayers[]                                      │
+ * │     Filters playerId → updates player                                      │
+ * │                                                                             │
+ * │   ENEMIES COLLECTION:                                                       │
+ * │     Path: games/{gameId}/enemies                                           │
+ * │     onSnapshot → updates enemies[]                                         │
+ * │                                                                             │
+ * │   CLEANUP:                                                                  │
+ * │     Unsubscribes from both collections on unmount                          │
+ * │                                                                             │
+ * │ DERIVED STATE:                                                              │
+ * │   isCombat = player?.status === 'IN_COMBAT'                                │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 'use client'
 
 import { useState, useEffect } from 'react';
@@ -8,7 +62,13 @@ export type PlayerState = {
   id: string;
   currentNode: string;
   status: "IDLE" | "MOVING" | "IN_COMBAT" | "DEAD";
-  stats: { hp: number; san: number };
+  stats: { 
+    hp: number; 
+    san: number;
+    stamina: number;
+    maxStamina: number;
+    stealth: number; // <--- Добавляем определение типа
+  };
   inventory: string[];
 };
 
