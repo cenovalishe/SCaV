@@ -8,7 +8,10 @@ export type PlayerState = {
   currentNode: string;
   status: "IDLE" | "MOVING" | "IN_COMBAT" | "DEAD";
   stats: { hp: number; san: number };
+  inventory: string[]; // <--- ДОБАВЬ ВОТ ЭТУ СТРОКУ
 };
+
+
 
 export type EnemyState = {
   id: string;
