@@ -8,6 +8,7 @@ import { useGame } from '@/hooks/useGame';
 import SecurityCamera from '@/components/SecurityCamera';
 import Inventory from '@/components/Inventory';
 import CombatEncounter from '@/components/CombatEncounter';
+import GameMap from '@/components/GameMap';
 
 const GAME_ID = 'game_alpha';
 const PLAYER_ID = 'player_1';
