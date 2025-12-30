@@ -70,45 +70,61 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
         )}
 
         {/* Слой 2: Узлы (Nodes) */}
-        {MAP_NODES_DATA.map(node => {
-          const isCurrent = node.id === currentNodeId;
-          const isNeighbor = neighbors.includes(node.id);
-          const enemyInNode = enemies.find(e => e.currentNode === node.id);
+		{MAP_NODES_DATA.map(node => {
+		  const isCurrent = node.id === currentNodeId;
+		  const isNeighbor = neighbors.includes(node.id);
+		  const enemyInNode = enemies.find(e => e.currentNode === node.id);
 
-          return (
-            <g 
-              key={node.id} 
-              className="cursor-pointer transition-all"
-              onClick={() => handleNodeClick(node.id)}
-            >
-              <circle
-                cx={node.pos[0]} cy={node.pos[1]}
-                r={isCurrent ? 2 : 1.2}
-                fill={isCurrent ? "#8b5cf6" : isNeighbor ? "#22c55e" : "#18181b"}
-                stroke={isNeighbor ? "#4ade80" : "#3f3f46"}
-                strokeWidth="0.2"
-                className={isNeighbor ? "animate-pulse" : ""}
-              />
-              <text
-                x={node.pos[0]} y={node.pos[1] - 3}
-                fontSize="1.5"
-                fill="#666"
-                textAnchor="middle"
-                className="pointer-events-none font-mono"
-              >
-                {node.id}
-              </text>
-              {enemyInNode && (
-                <circle
-                  cx={node.pos[0] + 1.5} cy={node.pos[1] - 1.5}
-                  r="0.8"
-                  fill="#ef4444"
-                  className="animate-bounce"
-                />
-              )}
-            </g>
-          );
-        })}
+		  return (
+			<g 
+			  key={node.id} 
+			  className={`transition-all ${isNeighbor ? "cursor-pointer" : "cursor-default"}`}
+			  onClick={(e) => {
+				e.stopPropagation(); // Предотвращаем всплытие события
+				if (isNeighbor) handleNodeClick(node.id);
+			  }}
+			>
+			  {/* Увеличим невидимую область клика вокруг узла для удобства */}
+			  <circle
+				cx={node.pos[0]} cy={node.pos[1]}
+				r="4" 
+				fill="transparent" 
+				className="hover:fill-white/5"
+			  />
+
+			  {/* Видимый круг узла */}
+			  <circle
+				cx={node.pos[0]} cy={node.pos[1]}
+				r={isCurrent ? 2 : 1.2}
+				fill={isCurrent ? "#8b5cf6" : isNeighbor ? "#22c55e" : "#3f3f46"}
+				stroke={isNeighbor ? "#4ade80" : "none"}
+				strokeWidth="0.5"
+				className={isNeighbor ? "animate-pulse" : ""}
+			  />
+
+			  {/* Текст ID узла */}
+			  <text
+				x={node.pos[0]} y={node.pos[1] - 3}
+				fontSize="2"
+				fill={isNeighbor ? "#fff" : "#666"}
+				textAnchor="middle"
+				className="font-mono font-bold select-none pointer-events-none"
+			  >
+				{node.id}
+			  </text>
+
+			  {/* Индикатор врага */}
+			  {enemyInNode && (
+				<circle
+				  cx={node.pos[0] + 1.5} cy={node.pos[1] - 1.5}
+				  r="1"
+				  fill="#ef4444"
+				  className="animate-bounce"
+				/>
+			  )}
+			</g>
+		  );
+		})}
       </svg>
     </div>
   );
