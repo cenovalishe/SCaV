@@ -3,60 +3,16 @@
  * FILE MANIFEST: components/CameraView.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Вид камеры наблюдения - основной визуальный элемент игры
+ * PURPOSE: Вид камеры наблюдения (REDESIGNED v2.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
+ * │ FEATURES                                                                    │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ DEFAULT EXPORT:                                                             │
- * │   CameraView          - React компонент камеры безопасности                │
- * │                                                                             │
- * │ PROPS (CameraViewProps):                                                    │
- * │   currentNode         - MapNodeData | null - данные текущей локации        │
- * │   nodeId              - string - ID текущей ноды                           │
- * │   enemiesHere         - string[] - имена врагов в локации                  │
- * │   playersHere         - {id, name, isCurrentPlayer}[] - игроки в локации   │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   react         → useState, useEffect                                      │
- * │   @/lib/mapData → MapNodeData, getRoomById, ROOM_IMAGES                    │
- * │                                                                             │
- * │ IMPORTED BY:                                                                │
- * │   app/page.tsx  → используется в левой части экрана (60% ширины)           │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ UI STRUCTURE (FNAF-style camera)                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │                                                                             │
- * │   ┌───────────────────────────────────────────────────────────────────┐    │
- * │   │ КАМЕРА R_MAIN (Dining Area) (id: 2)                      ● REC   │    │
- * │   ├───────────────────────────────────────────────────────────────────┤    │
- * │   │                                                                   │    │
- * │   │                                                                   │    │
- * │   │                    ┌─────────────────┐                            │    │
- * │   │                    │ ⚠ FREDDY        │  ← индикатор врага         │    │
- * │   │                    └─────────────────┘                            │    │
- * │   │                                                                   │    │
- * │   │  [фоновое изображение с анимацией панорамирования]               │    │
- * │   │  [оверлей с эффектом помех - мерцающие линии]                    │    │
- * │   │  [виньетка - затемнение по краям]                                │    │
- * │   │                                                                   │    │
- * │   │ ┌──────────────────┐                              12:30:45       │    │
- * │   │ │● Player1 (вы)    │                              30.12.2025     │    │
- * │   │ │● Player2         │    СТОЛОВАЯ                                 │    │
- * │   │ └──────────────────┘    Узел: 2                                  │    │
- * │   └───────────────────────────────────────────────────────────────────┘    │
- * │                                                                             │
- * │ EFFECTS:                                                                    │
- * │   - animate-pan-camera: плавное панорамирование фона                       │
- * │   - noiseOpacity: мерцающий эффект помех (150ms интервал)                  │
- * │   - Время обновляется каждую секунду                                       │
- * │   - Индикаторы врагов пульсируют (animate-pulse, animate-ping)             │
+ * │ - Эффекты при просмотре (scanlines, vignette, noise)                       │
+ * │ - Эффект переключения камеры (static noise + glitch)                       │
+ * │ - Улучшенная визуализация врагов и игроков                                 │
+ * │ - Стилизованный UI камеры                                                  │
+ * │ - Поддержка переключения на любую ноду                                     │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -64,109 +20,187 @@
 
 'use client'
 
-import React, { useState, useEffect } from 'react'; //
+import React, { useState, useEffect, useRef } from 'react';
 import { MapNodeData, ROOM_IMAGES, getRoomByNodeId } from '@/lib/mapData';
 import Image from 'next/image';
 
 interface CameraViewProps {
   currentNode: MapNodeData | null;
+  viewingNode?: MapNodeData | null; // ★ Нода, которую СМОТРИМ (может отличаться от текущей позиции)
   nodeId: string;
-  enemiesHere: string[];
+  enemiesHere: { id: string; name: string; type: string }[];
   playersHere: { id: string; name: string; isCurrentPlayer: boolean }[];
 }
 
-export default function CameraView({ currentNode, nodeId, enemiesHere, playersHere }: CameraViewProps) {
-  const room = getRoomByNodeId(nodeId);
-  
-  // 1. Состояние для эффекта переключения
+export default function CameraView({
+  currentNode,
+  viewingNode,
+  nodeId,
+  enemiesHere,
+  playersHere
+}: CameraViewProps) {
+  // Используем viewingNode если передан, иначе текущую ноду
+  const displayNode = viewingNode || currentNode;
+  const displayNodeId = viewingNode?.id || nodeId;
+  const room = getRoomByNodeId(displayNodeId);
+
+  // Состояния для эффектов
   const [isSwitching, setIsSwitching] = useState(false);
+  const [glitchIntensity, setGlitchIntensity] = useState(0);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const prevNodeIdRef = useRef(displayNodeId);
 
-  // 2. Эффект: при смене nodeId включаем "шум" на 200мс
+  // Эффект переключения камеры
   useEffect(() => {
-    setIsSwitching(true);
-    const timer = setTimeout(() => {
-      setIsSwitching(false);
-    }, 250); // Длительность помех
+    if (prevNodeIdRef.current !== displayNodeId) {
+      setIsSwitching(true);
+      setGlitchIntensity(1);
 
-    return () => clearTimeout(timer);
-  }, [nodeId]);
+      // Уменьшаем глитч постепенно
+      const glitchTimer = setTimeout(() => setGlitchIntensity(0.5), 100);
+      const glitchTimer2 = setTimeout(() => setGlitchIntensity(0.2), 200);
+      const timer = setTimeout(() => {
+        setIsSwitching(false);
+        setGlitchIntensity(0);
+      }, 350);
 
-  // Получаем изображение (или заглушку, если нет комнаты)
-  const imageSrc = room && ROOM_IMAGES[room.id] 
-    ? ROOM_IMAGES[room.id] 
-    : 'https://media.istockphoto.com/id/175425791/photo/tv-static.jpg?s=612x612&w=0&k=20&c=N2C6A9I5kFkM-v7j8bQ3xXk4dFj8lZ7y5o_5z7k5x8=';
+      prevNodeIdRef.current = displayNodeId;
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(glitchTimer);
+        clearTimeout(glitchTimer2);
+      };
+    }
+  }, [displayNodeId]);
+
+  // Обновление времени
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Изображение комнаты
+  const imageSrc = room && ROOM_IMAGES[room.id]
+    ? ROOM_IMAGES[room.id]
+    : '/images/static.jpg';
+
+  // Проверяем, смотрим ли мы на другую ноду
+  const isRemoteViewing = viewingNode && viewingNode.id !== currentNode?.id;
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden border-4 border-zinc-900 shadow-inner">
-      
-      {/* 3. Основной контейнер с контентом (скрываем его, если идет сильный шум переключения, или оставляем для просвечивания) */}
-      <div className={`relative w-full h-full transition-opacity duration-100 ${isSwitching ? 'opacity-50' : 'opacity-100'} crt-flicker`}>
-        
-        {/* Фоновое изображение комнаты */}
+    <div className="relative w-full h-full bg-black overflow-hidden border-2 border-zinc-800 rounded-lg shadow-2xl">
+
+      {/* Основной контент камеры */}
+      <div
+        className={`relative w-full h-full transition-all duration-100 ${isSwitching ? 'opacity-40 scale-[1.02]' : 'opacity-100'}`}
+        style={{
+          transform: glitchIntensity > 0 ? `translateX(${(Math.random() - 0.5) * glitchIntensity * 10}px)` : 'none'
+        }}
+      >
+        {/* Фоновое изображение */}
         {room && (
           <Image
-		    src={imageSrc}
-		    alt={room.label || "Camera"}
-		    fill
-		    priority // Добавляет наивысший приоритет загрузки
-		    unoptimized // Отключает сжатие для мгновенной отдачи из public
-		    className="object-cover opacity-60 grayscale contrast-125 brightness-75"
-		  />
+            src={imageSrc}
+            alt={room.label || "Camera"}
+            fill
+            priority
+            unoptimized
+            className="object-cover opacity-60 grayscale contrast-125 brightness-75 animate-pan-camera"
+          />
         )}
 
-        {/* Если нет сигнала/комнаты */}
+        {/* Если нет сигнала */}
         {!room && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
-            <span className="font-mono text-xl text-white/50 animate-pulse">NO SIGNAL</span>
+            <div className="text-center">
+              <div className="text-6xl mb-4 animate-pulse">📺</div>
+              <span className="font-mono text-2xl text-white/50 animate-pulse tracking-widest">NO SIGNAL</span>
+            </div>
           </div>
         )}
 
-        {/* Отрисовка врагов (силуэты) */}
-        {enemiesHere.map((enemy, idx) => (
-          <div 
-            key={idx}
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-black/80 blur-xl animate-pulse"
-            title={`Enemy: ${enemy}`}
-          />
-        ))}
-
+        {/* Силуэты врагов */}
+        {enemiesHere.length > 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            {enemiesHere.map((enemy, idx) => (
+              <div
+                key={enemy.id}
+                className="absolute"
+                style={{
+                  left: `${30 + idx * 20}%`,
+                  top: '40%',
+                  transform: 'translate(-50%, -50%)'
+                }}
+              >
+                {/* Тень врага */}
+                <div className="w-32 h-48 bg-gradient-to-t from-black/90 to-transparent blur-xl animate-pulse" />
+                {/* Глаза */}
+                <div className="absolute top-12 left-1/2 -translate-x-1/2 flex gap-6">
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-ping shadow-[0_0_20px_red]" />
+                  <div className="w-3 h-3 bg-red-500 rounded-full animate-ping shadow-[0_0_20px_red]" style={{ animationDelay: '0.1s' }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Список игроков в локации - улучшенный дизайн */}
-      {playersHere.length > 0 && (
-        <div className="absolute bottom-20 left-4 z-20">
-          <div className="bg-zinc-900/90 border border-green-500/30 rounded-lg overflow-hidden min-w-[140px]">
-            {/* Заголовок */}
-            <div className="bg-green-900/50 px-3 py-1 border-b border-green-500/20">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <span className="text-green-400 font-mono text-xs uppercase tracking-wide">
-                  Игрок
-                </span>
+      {/* ═══ ИНДИКАТОРЫ ВРАГОВ ═══ */}
+      {enemiesHere.length > 0 && (
+        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30">
+          {enemiesHere.map((enemy, idx) => (
+            <div
+              key={enemy.id}
+              className="flex items-center gap-3 bg-red-900/80 border-2 border-red-500 px-4 py-2 rounded-lg mb-2 animate-pulse shadow-lg shadow-red-500/50"
+            >
+              <span className="text-2xl">⚠</span>
+              <div>
+                <div className="text-red-400 font-mono text-xs uppercase">Обнаружен</div>
+                <div className="text-white font-mono text-lg font-bold tracking-wider">
+                  {enemy.name || enemy.type}
+                </div>
               </div>
             </div>
-            {/* Список игроков */}
-            <div className="px-2 py-1 space-y-1">
+          ))}
+        </div>
+      )}
+
+      {/* ═══ СПИСОК ИГРОКОВ ═══ */}
+      {playersHere.length > 0 && (
+        <div className="absolute bottom-20 left-4 z-20">
+          <div className="bg-black/80 border border-green-500/40 rounded-xl overflow-hidden min-w-[160px] backdrop-blur-sm">
+            <div className="bg-green-900/60 px-4 py-2 border-b border-green-500/30">
+              <div className="flex items-center gap-2">
+                <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50" />
+                <span className="text-green-400 font-mono text-xs uppercase tracking-widest">
+                  В локации
+                </span>
+                <span className="ml-auto text-green-400/60 font-mono text-xs">{playersHere.length}</span>
+              </div>
+            </div>
+            <div className="p-2 space-y-1">
               {playersHere.map((p) => (
                 <div
                   key={p.id}
-                  className={`flex items-center gap-2 px-2 py-1 rounded ${
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
                     p.isCurrentPlayer
-                      ? 'bg-purple-900/40 border border-purple-500/30'
-                      : 'bg-zinc-800/50'
+                      ? 'bg-purple-900/50 border border-purple-500/40'
+                      : 'bg-zinc-800/50 hover:bg-zinc-700/50'
                   }`}
                 >
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      p.isCurrentPlayer ? 'bg-purple-500' : 'bg-green-500'
-                    }`}
-                  />
-                  <span className={`font-mono text-xs ${
-                    p.isCurrentPlayer ? 'text-purple-300' : 'text-white/70'
+                  <div className={`w-2.5 h-2.5 rounded-full ${
+                    p.isCurrentPlayer ? 'bg-purple-500 shadow-lg shadow-purple-500/50' : 'bg-green-500'
+                  }`} />
+                  <span className={`font-mono text-sm ${
+                    p.isCurrentPlayer ? 'text-purple-300 font-bold' : 'text-white/70'
                   }`}>
                     {p.name}
-                    {p.isCurrentPlayer && ' (вы)'}
                   </span>
+                  {p.isCurrentPlayer && (
+                    <span className="ml-auto text-[10px] text-purple-400/60 font-mono">(ВЫ)</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -174,36 +208,105 @@ export default function CameraView({ currentNode, nodeId, enemiesHere, playersHe
         </div>
       )}
 
-      {/* ─── ЭФФЕКТЫ ПОВЕРХ КАМЕРЫ ─── */}
+      {/* ═══ ЭФФЕКТЫ КАМЕРЫ ═══ */}
 
-      {/* 4. Шум при переключении (показывается только когда isSwitching === true) */}
+      {/* Шум при переключении */}
       {isSwitching && (
-        <div className="static-overlay mix-blend-hard-light"></div>
+        <>
+          <div className="static-overlay mix-blend-hard-light" />
+          {/* Глитч-линии */}
+          <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
+            {Array(5).fill(0).map((_, i) => (
+              <div
+                key={i}
+                className="absolute w-full h-2 bg-white/30"
+                style={{
+                  top: `${Math.random() * 100}%`,
+                  transform: `translateX(${(Math.random() - 0.5) * 50}px)`,
+                }}
+              />
+            ))}
+          </div>
+        </>
       )}
 
-      {/* 5. Постоянные CRT эффекты (Скан-линии и Виньетка) */}
-      <div className="scanlines mix-blend-overlay opacity-50"></div>
-      <div className="vignette"></div>
+      {/* Постоянные CRT эффекты */}
+      <div className="scanlines mix-blend-overlay opacity-40" />
+      <div className="vignette" />
 
-      {/* 6. Текстовый оверлей (UI камеры) */}
-      <div className="absolute top-4 left-4 z-20 pointer-events-none">
-        <div className="flex items-center gap-2 mb-1">
-          <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse shadow-[0_0_10px_red]" />
-          <span className="font-mono text-red-600 text-lg tracking-widest shadow-black drop-shadow-md">REC</span>
+      {/* Мерцание CRT */}
+      <div className="absolute inset-0 pointer-events-none crt-flicker" />
+
+      {/* ═══ UI КАМЕРЫ ═══ */}
+
+      {/* Заголовок камеры */}
+      <div className="absolute top-0 left-0 right-0 z-20 p-4">
+        <div className="flex items-center justify-between">
+          {/* REC индикатор */}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 rounded-full bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
+              <span className="font-mono text-red-500 text-lg font-bold tracking-[0.3em] drop-shadow-lg">
+                REC
+              </span>
+            </div>
+            {isRemoteViewing && (
+              <div className="px-2 py-1 bg-blue-900/60 border border-blue-500/50 rounded text-blue-400 font-mono text-xs">
+                УДАЛЁННЫЙ ПРОСМОТР
+              </div>
+            )}
+          </div>
+
+          {/* Время */}
+          <div className="text-right">
+            <div className="font-mono text-white/90 text-lg tracking-wider drop-shadow-lg">
+              {currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+            </div>
+            <div className="font-mono text-white/50 text-xs">
+              {currentTime.toLocaleDateString('ru-RU')}
+            </div>
+          </div>
         </div>
-        <div className="font-mono text-white/90 text-xl tracking-wider drop-shadow-md">
-          {currentNode ? `CAM-${currentNode.id} [${currentNode.nameRu.toUpperCase()}]` : 'OFFLINE'}
+
+        {/* Название камеры */}
+        <div className="mt-3 flex items-center gap-3">
+          <div className="font-mono text-white text-2xl font-bold tracking-wider drop-shadow-lg">
+            CAM-{displayNode?.id || '??'}
+          </div>
+          <div className="px-3 py-1 bg-white/10 border border-white/20 rounded-lg">
+            <span className="font-mono text-white/80 text-sm uppercase">
+              {displayNode?.nameRu || 'OFFLINE'}
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="absolute bottom-4 right-4 z-20 pointer-events-none text-right">
-        <div className="font-mono text-white/70 text-sm">
-          {new Date().toLocaleTimeString('en-US', { hour12: true })}
-        </div>
-        <div className="font-mono text-white/50 text-xs">
-          60 FPS • 1080p
+      {/* Футер камеры */}
+      <div className="absolute bottom-0 left-0 right-0 z-20 p-4">
+        <div className="flex items-end justify-between">
+          <div className="font-mono text-white/40 text-xs">
+            {room?.label || 'Unknown Location'}
+          </div>
+          <div className="flex items-center gap-4 text-right">
+            <div className="font-mono text-white/40 text-xs">
+              <span className="text-green-400">●</span> 60 FPS
+            </div>
+            <div className="font-mono text-white/40 text-xs">
+              1080p HD
+            </div>
+            <div className="font-mono text-white/40 text-xs">
+              IR: {enemiesHere.length > 0 ? <span className="text-red-400">ACTIVE</span> : 'OFF'}
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Рамка камеры */}
+      <div className="absolute inset-0 border-4 border-zinc-800 rounded-lg pointer-events-none z-10" />
+      <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white/30 rounded-tl-lg pointer-events-none z-10" />
+      <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white/30 rounded-tr-lg pointer-events-none z-10" />
+      <div className="absolute bottom-0 left-0 w-8 h-8 border-b-4 border-l-4 border-white/30 rounded-bl-lg pointer-events-none z-10" />
+      <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-white/30 rounded-br-lg pointer-events-none z-10" />
     </div>
   );
 }

@@ -3,17 +3,15 @@
  * FILE MANIFEST: components/ActionPanel.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Панель действий игрока - лутинг, ожидание, использование предметов
+ * PURPOSE: Панель действий игрока (REDESIGNED v2.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ PROPS:                                                                      │
- * │   currentNode       - MapNodeData - текущая локация                        │
- * │   currentStamina    - number - текущая выносливость                        │
- * │   isLooting         - boolean - идёт ли лутинг                             │
- * │   canLoot           - boolean - можно ли лутить (есть лут и выносливость)  │
- * │   hasEnemyHere      - boolean - есть ли враг в локации                     │
- * │   onLoot            - () => void - начать лутинг                           │
- * │   onWait            - () => void - пропустить ход                          │
+ * │ FEATURES                                                                    │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ - Стилизованные кнопки действий                                            │
+ * │ - Анимированные индикаторы процесса                                        │
+ * │ - Улучшенная визуализация лута и угроз                                     │
+ * │ - Callback для добавления лута в инвентарь                                 │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -32,9 +30,10 @@ interface ActionPanelProps {
   hasEnemyHere: boolean;
   onLoot: () => void;
   onWait: () => void;
+  foundItem?: { icon: string; name: string } | null; // Найденный предмет
 }
 
-const LOOT_COST = 1; // Стоимость лутинга в выносливости
+const LOOT_COST = 1;
 
 export default function ActionPanel({
   currentNode,
@@ -43,114 +42,176 @@ export default function ActionPanel({
   canLoot,
   hasEnemyHere,
   onLoot,
-  onWait
+  onWait,
+  foundItem
 }: ActionPanelProps) {
   const hasLoot = currentNode && currentNode.possibleLoot.length > 0;
   const enoughStamina = currentStamina >= LOOT_COST;
   const lootDisabled = !canLoot || !hasLoot || !enoughStamina || hasEnemyHere || isLooting;
 
-  // Получаем тип лута для отображения
   const getLootTypeLabel = () => {
     if (!currentNode) return '';
     switch (currentNode.lootType) {
-      case 'rare': return 'Редкий лут';
+      case 'rare': return 'Редкий';
       case 'supplies': return 'Расходники';
-      default: return 'Обычный лут';
+      default: return 'Обычный';
     }
   };
 
-  const getLootTypeColor = () => {
-    if (!currentNode) return 'text-white/50';
+  const getLootTypeConfig = () => {
+    if (!currentNode) return { color: 'text-white/50', bg: 'bg-zinc-800', border: 'border-zinc-700' };
     switch (currentNode.lootType) {
-      case 'rare': return 'text-red-400';
-      case 'supplies': return 'text-blue-400';
-      default: return 'text-green-400';
+      case 'rare': return { color: 'text-red-400', bg: 'bg-red-900/30', border: 'border-red-500/30' };
+      case 'supplies': return { color: 'text-blue-400', bg: 'bg-blue-900/30', border: 'border-blue-500/30' };
+      default: return { color: 'text-green-400', bg: 'bg-green-900/30', border: 'border-green-500/30' };
     }
   };
+
+  const lootConfig = getLootTypeConfig();
 
   return (
-    <div className="bg-zinc-900/90 border border-white/10 rounded-lg p-3">
+    <div className="h-full bg-gradient-to-b from-zinc-900 to-black border border-white/10 rounded-xl p-4 flex flex-col">
       {/* Заголовок */}
-      <div className="text-white/50 font-mono text-xs uppercase tracking-wider mb-3">
-        Действия
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-1 h-5 bg-amber-500 rounded-full" />
+        <span className="text-white/80 font-mono text-sm uppercase tracking-[0.2em]">
+          Действия
+        </span>
+        <div className="flex-1 h-px bg-gradient-to-r from-white/10 to-transparent" />
       </div>
 
       {/* Информация о локации */}
       {currentNode && (
-        <div className="mb-3 p-2 bg-black/50 rounded border border-white/5">
-          <div className="text-white/70 font-mono text-sm">
-            {currentNode.nameRu}
-          </div>
-          {hasLoot && (
-            <div className={`font-mono text-xs mt-1 ${getLootTypeColor()}`}>
-              {getLootTypeLabel()} ({currentNode.possibleLoot.length} предметов)
+        <div className="mb-4 p-3 bg-black/50 rounded-lg border border-white/5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-white font-mono text-sm font-bold">
+              {currentNode.nameRu}
             </div>
-          )}
-          {!hasLoot && (
-            <div className="text-white/30 font-mono text-xs mt-1">
-              Нет лута в этой локации
+            <div className="text-white/30 font-mono text-xs">
+              [{currentNode.id}]
+            </div>
+          </div>
+
+          {hasLoot ? (
+            <div className={`flex items-center gap-2 p-2 rounded ${lootConfig.bg} border ${lootConfig.border}`}>
+              <span className="text-lg">💎</span>
+              <div className="flex-1">
+                <div className={`font-mono text-xs font-bold ${lootConfig.color}`}>
+                  {getLootTypeLabel()} лут
+                </div>
+                <div className="text-white/40 text-[10px] font-mono">
+                  {currentNode.possibleLoot.length} возможных предметов
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 text-white/30 font-mono text-xs p-2">
+              <span>📭</span>
+              <span>Нет лута</span>
             </div>
           )}
         </div>
       )}
 
+      {/* Найденный предмет (анимация) */}
+      {foundItem && (
+        <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-500/50 rounded-lg animate-pulse">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">{foundItem.icon}</span>
+            <div>
+              <div className="text-yellow-400 font-mono text-xs uppercase">Найдено!</div>
+              <div className="text-white font-mono text-sm font-bold">{foundItem.name}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Предупреждение о враге */}
+      {hasEnemyHere && (
+        <div className="mb-4 p-3 bg-red-900/40 border border-red-500/50 rounded-lg flex items-center gap-3 animate-pulse">
+          <span className="text-2xl">⚠</span>
+          <div>
+            <div className="text-red-400 font-mono text-sm font-bold">ОПАСНОСТЬ!</div>
+            <div className="text-red-300/60 font-mono text-xs">Враг в локации. Лутинг невозможен.</div>
+          </div>
+        </div>
+      )}
+
       {/* Кнопки действий */}
-      <div className="flex flex-col gap-2">
-        {/* Кнопка лутинга */}
+      <div className="flex-1 flex flex-col gap-3">
+        {/* Кнопка ОБЫСКАТЬ */}
         <button
           onClick={onLoot}
           disabled={lootDisabled}
           className={`
-            w-full px-4 py-2 font-mono text-sm font-bold transition-all border rounded
-            flex items-center justify-center gap-2
+            relative w-full px-4 py-4 font-mono text-base font-bold transition-all rounded-xl
+            flex items-center justify-center gap-3 overflow-hidden
             ${lootDisabled
-              ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
-              : 'bg-amber-600 hover:bg-amber-500 text-white border-amber-500 hover:border-amber-400'
+              ? 'bg-zinc-800/50 text-zinc-500 border-2 border-zinc-700 cursor-not-allowed'
+              : 'bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white border-2 border-amber-400 shadow-lg shadow-amber-500/30 hover:shadow-amber-500/50 hover:scale-[1.02] active:scale-[0.98]'
             }
           `}
         >
+          {/* Фоновый эффект */}
+          {!lootDisabled && !isLooting && (
+            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full animate-[shimmer_2s_infinite]" />
+          )}
+
           {isLooting ? (
             <>
-              <span className="animate-spin">⟳</span>
+              <span className="text-2xl animate-spin">🔄</span>
               <span>Обыскиваю...</span>
             </>
           ) : (
             <>
-              <span>🔍</span>
-              <span>Обыскать</span>
-              <span className="text-xs opacity-70">({LOOT_COST}⚡)</span>
+              <span className="text-2xl">🔍</span>
+              <span>ОБЫСКАТЬ</span>
+              <div className="flex items-center gap-1 bg-black/20 px-2 py-0.5 rounded-full">
+                <span className="text-yellow-300">⚡</span>
+                <span className="text-sm">{LOOT_COST}</span>
+              </div>
             </>
           )}
         </button>
 
-        {/* Предупреждение о враге */}
-        {hasEnemyHere && (
-          <div className="text-red-400 font-mono text-xs text-center animate-pulse">
-            ⚠ Враг рядом! Лутинг невозможен
-          </div>
-        )}
-
-        {/* Кнопка ожидания */}
+        {/* Кнопка ЖДАТЬ */}
         <button
           onClick={onWait}
           disabled={isLooting}
           className={`
-            w-full px-4 py-2 font-mono text-sm transition-all border rounded
+            w-full px-4 py-3 font-mono text-sm transition-all rounded-xl
             flex items-center justify-center gap-2
             ${isLooting
-              ? 'bg-zinc-800 text-zinc-500 border-zinc-700 cursor-not-allowed'
-              : 'bg-zinc-700 hover:bg-zinc-600 text-white/70 border-zinc-600 hover:border-zinc-500'
+              ? 'bg-zinc-800/50 text-zinc-500 border border-zinc-700 cursor-not-allowed'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-white/70 hover:text-white border border-zinc-600 hover:border-zinc-500'
             }
           `}
         >
-          <span>⏳</span>
+          <span className="text-lg">⏳</span>
           <span>Ждать</span>
         </button>
       </div>
 
-      {/* Подсказка */}
-      <div className="mt-3 text-white/30 font-mono text-[10px] text-center">
-        Выносливость: {currentStamina}⚡
+      {/* Футер с выносливостью */}
+      <div className="mt-4 pt-3 border-t border-white/10">
+        <div className="flex items-center justify-between">
+          <span className="text-white/40 font-mono text-xs">Выносливость</span>
+          <div className="flex items-center gap-2">
+            <div className="flex gap-0.5">
+              {Array(7).fill(0).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-3 h-2 rounded-sm transition-all ${
+                    i < currentStamina
+                      ? 'bg-yellow-400 shadow-sm shadow-yellow-400/50'
+                      : 'bg-zinc-700'
+                  }`}
+                />
+              ))}
+            </div>
+            <span className="text-yellow-400 font-mono text-sm font-bold">{currentStamina}⚡</span>
+          </div>
+        </div>
       </div>
     </div>
   );
