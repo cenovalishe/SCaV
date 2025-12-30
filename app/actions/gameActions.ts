@@ -8,17 +8,25 @@ import { FieldValue } from 'firebase-admin/firestore';
 // Определим тип ответа сверху файла
 type MoveResponse = {
   success: boolean;
-  message?: string;
+  message: string;
   event?: string;
-  loot?: string;
+  loot?: string; // <--- Убедись, что это поле добавлено сюда
 };
 
 
-export async function movePlayer(gameId: string, playerId: string, targetNodeId: string) {
+export async function movePlayer(
+  gameId: string, 
+  playerId: string, 
+  targetNodeId: string
+): Promise<MoveResponse> { // <--- ВОТ ЭТО ИСПРАВЛЕНИЕ
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
     const playerSnap = await playerRef.get();
-    if (!playerSnap.exists) throw new Error('Player not found');
+    
+    if (!playerSnap.exists) {
+        // Чтобы удовлетворить типу MoveResponse, добавим message
+        return { success: false, message: 'Player not found' }; 
+    }
 
     const playerData = playerSnap.data();
     const currentNodeId = playerData?.currentNode;
@@ -56,7 +64,8 @@ export async function movePlayer(gameId: string, playerId: string, targetNodeId:
     return { 
       success: true, 
       message: `Moved to ${targetNodeId}`, 
-      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR" 
+      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR",
+      loot: undefined // Можно добавить явно, чтобы избежать undefined ошибок
     };
   } catch (e) {
     return { success: false, message: "Error" };
