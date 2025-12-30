@@ -46,13 +46,13 @@ export default function GameBoard() {
     init();
   }, []);
 
-
-  // 2. Получение данных игры
+// 1. Сначала вызываем хук
   const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
   
+  // 2. ТЕПЕРЬ можно логировать (после того как переменные объявлены)
   console.log("Статус загрузки:", { playerId, loading, hasPlayer: !!player });
 
-  // 3. ОПРЕДЕЛЯЕМ combatEnemy ЗДЕСЬ (после хука)
+  // 3. Определяем combatEnemy
   const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
 
   // 4. Проверка загрузки
