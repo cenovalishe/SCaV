@@ -9,9 +9,9 @@ import SecurityCamera from '@/components/SecurityCamera';
 import Inventory from '@/components/Inventory';
 import CombatEncounter from '@/components/CombatEncounter';
 import GameMap from '@/components/GameMap';
+import { useEffect, useState } from 'react';
+import { getOrCreatePlayer } from '@/app/actions/gameActions';
 
-const GAME_ID = 'game_alpha';
-const PLAYER_ID = 'player_1';
 
 // 2. Картинки объявляем вне компонента (статика), исправлена скобка
 const ROOM_IMAGES: Record<string, string> = {
@@ -20,12 +20,35 @@ const ROOM_IMAGES: Record<string, string> = {
 };
 
 export default function GameBoard() {
-  const [activeCam, setActiveCam] = useState<string | null>("node_04");
-  const { player, enemies, isCombat, loading } = useGame(GAME_ID, PLAYER_ID);
-  
-  if (loading || !player) return <div className="text-white text-center mt-20 font-mono">INITIALIZING NEURAL LINK...</div>;
+  // Заменяем константу на состояние
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const GAME_ID = 'game_alpha';
 
-  const combatEnemy = enemies.find(e => e.currentNode === player.currentNode);
+  useEffect(() => {
+    async function init() {
+      // Пытаемся достать ID из памяти браузера
+      const savedId = localStorage.getItem('scav_player_id');
+      const result = await getOrCreatePlayer(GAME_ID, savedId);
+      
+      if (result.success && result.playerId) {
+        localStorage.setItem('scav_player_id', result.playerId);
+        setPlayerId(result.playerId);
+      }
+    }
+    init();
+  }, []);
+
+  // Передаем динамический playerId в хук useGame
+  const { player, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
+
+  // Пока ID грузится, показываем экран загрузки
+  if (!playerId || loading || !player) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-mono">
+        <div className="animate-pulse">ESTABLISHING NEURAL LINK...</div>
+      </div>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-black text-white p-5 relative overflow-x-hidden flex flex-col items-center">
@@ -71,7 +94,8 @@ export default function GameBoard() {
 		  <div className="flex-1 w-full flex justify-center">
 			<GameMap 
 			  gameId={GAME_ID}
-			  playerId={PLAYER_ID}
+			  playerId={playerId}
+			  allPlayers={allPlayers} // Передаем список всех игроков
 			  currentNodeId={player.currentNode}
 			  enemies={enemies}
 			/>

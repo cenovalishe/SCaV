@@ -7,7 +7,8 @@ import { movePlayer } from '@/app/actions/gameActions';
 interface GameMapProps {
   currentNodeId: string;
   gameId: string;
-  playerId: string;
+  playerId: string; // Твой ID, чтобы выделить твою иконку
+  allPlayers: any[]; // Все игроки из useGame
   enemies: any[];
 }
 
@@ -74,7 +75,9 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
 		  const isCurrent = node.id === currentNodeId;
 		  const isNeighbor = neighbors.includes(node.id);
 		  const enemyInNode = enemies.find(e => e.currentNode === node.id);
-
+		  // Находим всех игроков, которые стоят на этом узле
+		  const playersHere = allPlayers.filter(p => p.currentNode === node.id);
+		  
 		  return (
 			<g 
 			  key={node.id} 
@@ -112,6 +115,18 @@ export default function GameMap({ currentNodeId, gameId, playerId, enemies }: Ga
 			  >
 				{node.id}
 			  </text>
+			  
+			  {/* Отрисовка Игроков */}
+			  {playersHere.map((p, idx) => (
+				<circle
+				  key={p.id}
+				  cx={node.pos[0] - 1.5 + (idx * 1.5)} // Смещение, если игроков несколько
+				  cy={node.pos[1] + 2}
+				  r="1"
+				  fill={p.id === playerId ? "#A855F7" : "#3B82F6"} // Ты — фиолетовый, друзья — синие
+				  className="transition-all duration-500"
+				/>
+			  ))}
 
 			  {/* Индикатор врага */}
 			  {enemyInNode && (

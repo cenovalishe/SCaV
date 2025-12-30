@@ -1,59 +1,60 @@
 'use client'
 
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, collection } from 'firebase/firestore';
+import { doc, onSnapshot, collection, query } from 'firebase/firestore';
 import { dbClient } from '@/lib/firebaseClient';
 
 export type PlayerState = {
+  id: string;
   currentNode: string;
   status: "IDLE" | "MOVING" | "IN_COMBAT" | "DEAD";
   stats: { hp: number; san: number };
-  inventory: string[]; // <--- ДОБАВЬ ВОТ ЭТУ СТРОКУ
+  inventory: string[];
 };
-
-
 
 export type EnemyState = {
   id: string;
   currentNode: string;
   type: string;
-  hp: number; // <--- ДОБАВЬ ЭТУ СТРОКУ
-  aggroRadius?: number; // Можно добавить и это на будущее
+  hp: number;
 };
 
 export function useGame(gameId: string, playerId: string) {
   const [player, setPlayer] = useState<PlayerState | null>(null);
+  const [allPlayers, setAllPlayers] = useState<PlayerState[]>([]);
   const [enemies, setEnemies] = useState<EnemyState[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Слушаем Игрока
-    const playerRef = doc(dbClient, 'games', gameId, 'players', playerId);
-    const unsubPlayer = onSnapshot(playerRef, (doc) => {
-      if (doc.exists()) {
-        setPlayer(doc.data() as PlayerState);
-      }
+    if (!gameId || !playerId) return;
+
+    // 1. Слушаем ВСЕХ игроков в этой игре
+    const playersRef = collection(dbClient, 'games', gameId, 'players');
+    const unsubPlayers = onSnapshot(playersRef, (snapshot) => {
+      const playersList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PlayerState));
+      setAllPlayers(playersList);
+      
+      // Находим среди них "себя" и обновляем локальное состояние
+      const me = playersList.find(p => p.id === playerId);
+      if (me) setPlayer(me);
+      
+      setLoading(false);
     });
 
-    // 2. Слушаем Врагов (Коллекцию)
+    // 2. Слушаем Врагов
     const enemiesRef = collection(dbClient, 'games', gameId, 'enemies');
     const unsubEnemies = onSnapshot(enemiesRef, (snapshot) => {
       const enemiesList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as EnemyState));
       setEnemies(enemiesList);
     });
 
-    setLoading(false);
-
-    // Очистка слушателей при размонтировании
     return () => {
-      unsubPlayer();
+      unsubPlayers();
       unsubEnemies();
     };
   }, [gameId, playerId]);
 
-  // 3. Логика проверки на БОЙ (Client-side check for immediate UI feedback)
-  // Хотя сервер тоже ставит статус, клиент должен реагировать мгновенно
-  const isCombat = player?.status === 'IN_COMBAT' || enemies.some(e => e.currentNode === player?.currentNode);
+  const isCombat = player?.status === 'IN_COMBAT';
 
-  return { player, enemies, isCombat, loading };
+  return { player, allPlayers, enemies, isCombat, loading };
 }

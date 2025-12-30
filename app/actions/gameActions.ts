@@ -71,3 +71,39 @@ export async function movePlayer(
     return { success: false, message: "Error" };
   }
 }
+
+
+// app/actions/gameActions.ts
+
+export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | null) {
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+    
+    // 1. Если ID уже был сохранен в браузере, проверяем его в базе
+    if (savedPlayerId) {
+      const doc = await playersRef.doc(savedPlayerId).get();
+      if (doc.exists) return { success: true, playerId: savedPlayerId };
+    }
+
+    // 2. Если ID нет или он не найден — создаем нового игрока
+    const newPlayerRef = playersRef.doc(); // Генерирует уникальный ID автоматически
+    const newId = newPlayerRef.id;
+
+    const startData = {
+      id: newId,
+      currentNode: "SF", // Твоя точка старта на новой карте
+      status: "IDLE",
+      stats: {
+        hp: 100,
+        san: 100
+      },
+      inventory: ["Flashlight"]
+    };
+
+    await newPlayerRef.set(startData);
+    return { success: true, playerId: newId };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: "Failed to initialize player" };
+  }
+}
