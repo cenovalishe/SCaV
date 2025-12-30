@@ -64,8 +64,9 @@
 
 'use client'
 
-import { useState, useEffect } from 'react';
-import { MapNodeData, getRoomById, ROOM_IMAGES } from '@/lib/mapData';
+import React, { useState, useEffect } from 'react'; //
+import { MapNodeData, ROOM_IMAGES, getRoomByNodeId } from '@/lib/mapData';
+import Image from 'next/image';
 
 interface CameraViewProps {
   currentNode: MapNodeData | null;
@@ -74,134 +75,100 @@ interface CameraViewProps {
   playersHere: { id: string; name: string; isCurrentPlayer: boolean }[];
 }
 
-export default function CameraView({
-  currentNode,
-  nodeId,
-  enemiesHere,
-  playersHere
-}: CameraViewProps) {
-  const [noiseOpacity, setNoiseOpacity] = useState(0.1);
-  const [time, setTime] = useState(new Date());
+export default function CameraView({ currentNode, nodeId, enemiesHere, playersHere }: CameraViewProps) {
+  const room = getRoomByNodeId(nodeId);
+  
+  // 1. Состояние для эффекта переключения
+  const [isSwitching, setIsSwitching] = useState(false);
 
-  const room = currentNode ? getRoomById(currentNode.roomId) : null;
-  const roomLabel = room?.label || 'UNKNOWN';
-  const roomLabelEn = room?.labelEn || 'Unknown';
-  const imageSrc = currentNode ? ROOM_IMAGES[currentNode.roomId] : '';
-
-  // Эффект помех
+  // 2. Эффект: при смене nodeId включаем "шум" на 200мс
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNoiseOpacity(Math.random() * 0.15 + 0.05);
-    }, 150);
-    return () => clearInterval(interval);
-  }, []);
+    setIsSwitching(true);
+    const timer = setTimeout(() => {
+      setIsSwitching(false);
+    }, 250); // Длительность помех
 
-  // Обновление времени
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setTime(new Date());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+    return () => clearTimeout(timer);
+  }, [nodeId]);
+
+  // Получаем изображение (или заглушку, если нет комнаты)
+  const imageSrc = room && ROOM_IMAGES[room.id] 
+    ? ROOM_IMAGES[room.id] 
+    : 'https://media.istockphoto.com/id/175425791/photo/tv-static.jpg?s=612x612&w=0&k=20&c=N2C6A9I5kFkM-v7j8bQ3xXk4dFj8lZ7y5o_5z7k5x8=';
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden">
-      {/* Заголовок камеры */}
-      <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-black/80 to-transparent p-4">
-        <h2 className="text-white font-mono text-lg tracking-wider">
-          КАМЕРА {currentNode?.roomId || 'N/A'} ({roomLabelEn})
-          <span className="text-white/50 ml-2">(id: {nodeId})</span>
-        </h2>
+    <div className="relative w-full h-full bg-black overflow-hidden border-4 border-zinc-900 shadow-inner">
+      
+      {/* 3. Основной контейнер с контентом (скрываем его, если идет сильный шум переключения, или оставляем для просвечивания) */}
+      <div className={`relative w-full h-full transition-opacity duration-100 ${isSwitching ? 'opacity-50' : 'opacity-100'} crt-flicker`}>
+        
+        {/* Фоновое изображение комнаты */}
+        {room && (
+          <Image
+            src={imageSrc}
+            alt={room.labelRu || "Camera"}
+            fill
+            className="object-cover opacity-60 grayscale contrast-125 brightness-75" // CSS фильтры для старого вида
+            priority
+          />
+        )}
+
+        {/* Если нет сигнала/комнаты */}
+        {!room && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
+            <span className="font-mono text-xl text-white/50 animate-pulse">NO SIGNAL</span>
+          </div>
+        )}
+
+        {/* Отрисовка врагов (силуэты) */}
+        {enemiesHere.map((enemy, idx) => (
+          <div 
+            key={idx}
+            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-black/80 blur-xl animate-pulse"
+            title={`Enemy: ${enemy}`}
+          />
+        ))}
+
+        {/* Отрисовка других игроков */}
+        {playersHere.map((p) => !p.isCurrentPlayer && (
+          <div 
+            key={p.id}
+            className="absolute top-2/3 left-1/3 w-12 h-32 bg-green-500/20 border border-green-500/50 flex items-center justify-center"
+          >
+            <span className="text-[10px] text-green-500 font-mono -mt-6">{p.name}</span>
+          </div>
+        ))}
       </div>
 
-      {/* Изображение комнаты */}
-      {imageSrc ? (
-        <div
-          className="absolute inset-0 bg-cover bg-center animate-pan-camera"
-          style={{
-            backgroundImage: `url(${imageSrc})`,
-            transform: 'scale(1.2)'
-          }}
-        />
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="text-white/20 font-mono text-xl">NO SIGNAL</div>
-        </div>
+      {/* ─── ЭФФЕКТЫ ПОВЕРХ КАМЕРЫ ─── */}
+
+      {/* 4. Шум при переключении (показывается только когда isSwitching === true) */}
+      {isSwitching && (
+        <div className="static-overlay mix-blend-hard-light"></div>
       )}
 
-      {/* Оверлей с помехами */}
-      <div
-        className="absolute inset-0 pointer-events-none z-10"
-        style={{
-          background: `repeating-linear-gradient(
-            0deg,
-            transparent,
-            transparent 2px,
-            rgba(0, 0, 0, 0.1) 2px,
-            rgba(0, 0, 0, 0.1) 4px
-          )`,
-          opacity: noiseOpacity
-        }}
-      />
+      {/* 5. Постоянные CRT эффекты (Скан-линии и Виньетка) */}
+      <div className="scanlines mix-blend-overlay opacity-50"></div>
+      <div className="vignette"></div>
 
-      {/* Виньетка */}
-      <div className="absolute inset-0 pointer-events-none z-10 shadow-[inset_0_0_100px_rgba(0,0,0,0.9)]" />
-
-      {/* Индикаторы врагов */}
-      {enemiesHere.length > 0 && (
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 z-15">
-          {enemiesHere.map((enemy, idx) => (
-            <div
-              key={idx}
-              className="bg-black/70 backdrop-blur-sm px-4 py-2 border border-red-500/50 animate-pulse mb-2"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-red-500 animate-ping">⚠</span>
-                <span className="text-red-400 font-mono text-sm uppercase">{enemy}</span>
-              </div>
-            </div>
-          ))}
+      {/* 6. Текстовый оверлей (UI камеры) */}
+      <div className="absolute top-4 left-4 z-20 pointer-events-none">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-3 h-3 rounded-full bg-red-600 animate-pulse shadow-[0_0_10px_red]" />
+          <span className="font-mono text-red-600 text-lg tracking-widest shadow-black drop-shadow-md">REC</span>
         </div>
-      )}
-
-      {/* Индикаторы игроков */}
-      {playersHere.length > 0 && (
-        <div className="absolute bottom-20 left-4 z-15 space-y-1">
-          {playersHere.map((player, idx) => (
-            <div
-              key={idx}
-              className={`px-2 py-1 text-xs font-mono ${
-                player.isCurrentPlayer
-                  ? 'bg-purple-900/70 text-purple-300 border border-purple-500/50'
-                  : 'bg-blue-900/70 text-blue-300 border border-blue-500/50'
-              }`}
-            >
-              ● {player.name || 'Игрок'} {player.isCurrentPlayer && '(вы)'}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* UI камеры */}
-      <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
-        <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse" />
-        <span className="text-red-500 font-mono text-xs">REC</span>
-      </div>
-
-      {/* Время */}
-      <div className="absolute bottom-4 right-4 z-20">
-        <div className="text-green-500/70 font-mono text-sm">
-          {time.toLocaleTimeString('ru-RU')}
-        </div>
-        <div className="text-green-500/50 font-mono text-xs text-right">
-          {time.toLocaleDateString('ru-RU')}
+        <div className="font-mono text-white/90 text-xl tracking-wider drop-shadow-md">
+          {currentNode ? `CAM-${currentNode.id} [${currentNode.nameRu.toUpperCase()}]` : 'OFFLINE'}
         </div>
       </div>
 
-      {/* Название комнаты снизу */}
-      <div className="absolute bottom-4 left-4 z-20">
-        <div className="text-white/80 font-mono text-sm">{roomLabel}</div>
-        <div className="text-white/40 font-mono text-xs">Узел: {nodeId}</div>
+      <div className="absolute bottom-4 right-4 z-20 pointer-events-none text-right">
+        <div className="font-mono text-white/70 text-sm">
+          {new Date().toLocaleTimeString('en-US', { hour12: true })}
+        </div>
+        <div className="font-mono text-white/50 text-xs">
+          60 FPS • 1080p
+        </div>
       </div>
     </div>
   );
