@@ -44,14 +44,7 @@ export async function movePlayer(
     const roll = Math.random();
     let status = "IDLE";
     
-    // Проверка на столкновение с врагом (серверная часть)
-    const enemiesSnap = await dbAdmin.collection('games').doc(gameId).collection('enemies')
-      .where('currentNode', '==', targetNodeId).get();
-    
-    if (!enemiesSnap.empty) {
-      status = "IN_COMBAT";
-    }
-
+ 
 // 3. Обновление игрока
     await playerRef.update({
       currentNode: targetNodeId,
