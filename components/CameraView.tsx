@@ -105,12 +105,13 @@ export default function CameraView({ currentNode, nodeId, enemiesHere, playersHe
         {/* Фоновое изображение комнаты */}
         {room && (
           <Image
-            src={imageSrc}
-            alt={room.label || "Camera"}
-            fill
-            className="object-cover opacity-60 grayscale contrast-125 brightness-75" // CSS фильтры для старого вида
-            priority
-          />
+		    src={imageSrc}
+		    alt={room.label || "Camera"}
+		    fill
+		    priority // Добавляет наивысший приоритет загрузки
+		    unoptimized // Отключает сжатие для мгновенной отдачи из public
+		    className="object-cover opacity-60 grayscale contrast-125 brightness-75"
+		  />
         )}
 
         {/* Если нет сигнала/комнаты */}
