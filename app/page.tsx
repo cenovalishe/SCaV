@@ -31,8 +31,13 @@ export default function GameBoard() {
   // 1. Инициализация игрока (твой useEffect)
   useEffect(() => {
     async function init() {
+      console.log("1. Начало инициализации...");
       const savedId = localStorage.getItem('scav_player_id');
+      console.log("2. Сохраненный ID из localStorage:", savedId);
+    
       const result = await getOrCreatePlayer(GAME_ID, savedId);
+      console.log("3. Результат сервера:", result);
+
       if (result.success && result.playerId) {
         localStorage.setItem('scav_player_id', result.playerId);
         setPlayerId(result.playerId);
@@ -40,6 +45,8 @@ export default function GameBoard() {
     }
     init();
   }, []);
+
+  console.log("Статус загрузки:", { playerId, loading, hasPlayer: !!player });
 
   // 2. Получение данных игры
   const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
