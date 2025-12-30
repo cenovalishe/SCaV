@@ -4,6 +4,7 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA } from '@/lib/mapData'; // Импортируем новые данные
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
+import type { QueryDocumentSnapshot } from 'firebase-admin/firestore';
 
 // Определим тип ответа сверху файла
 type MoveResponse = {
@@ -15,10 +16,15 @@ type MoveResponse = {
 
 
 export async function movePlayer(
-  gameId: string, 
-  playerId: string, 
+  gameId: string,
+  playerId: string,
   targetNodeId: string
 ): Promise<MoveResponse> { // <--- ВОТ ЭТО ИСПРАВЛЕНИЕ
+  // Проверяем наличие Firebase
+  if (!dbAdmin) {
+    return { success: false, message: "Firebase not configured" };
+  }
+
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
     const playerSnap = await playerRef.get();
@@ -59,7 +65,7 @@ export async function movePlayer(
     const enemiesSnap = await enemiesRef.get();
 
     // Создаем массив промисов для параллельного обновления врагов
-    const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
+    const enemyMoves = enemiesSnap.docs.map(async (enemyDoc: QueryDocumentSnapshot) => {
       const enemyData = enemyDoc.data();
       
       // Шанс движения 40%, чтобы они не летали по карте слишком быстро
@@ -94,6 +100,11 @@ export async function movePlayer(
 // app/actions/gameActions.ts
 
 export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | null) {
+  // Проверяем наличие Firebase
+  if (!dbAdmin) {
+    return { success: false, message: "Firebase not configured" };
+  }
+
   try {
     const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
     

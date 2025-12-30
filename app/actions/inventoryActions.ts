@@ -12,6 +12,11 @@ const ITEM_EFFECTS: Record<string, (stats: any) => any> = {
 };
 
 export async function useItem(gameId: string, playerId: string, itemKey: string) {
+  // Проверяем наличие Firebase
+  if (!dbAdmin) {
+    return { success: false, message: "Firebase not configured" };
+  }
+
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
     const playerSnap = await playerRef.get();

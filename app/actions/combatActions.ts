@@ -1,24 +1,29 @@
 'use server'
 
 import { dbAdmin } from '@/lib/firebaseAdmin';
-import { FieldValue } from 'firebase-admin/firestore';
+import type { Transaction, DocumentSnapshot } from 'firebase-admin/firestore';
 import { revalidatePath } from 'next/cache';
 
 export async function resolveCombatRound(
-  gameId: string, 
-  playerId: string, 
-  enemyId: string, 
+  gameId: string,
+  playerId: string,
+  enemyId: string,
   isSuccess: boolean
 ) {
+  // Проверяем наличие Firebase
+  if (!dbAdmin) {
+    return { success: false, message: "Firebase not configured" };
+  }
+
   try {
-    const gameRef = dbAdmin.collection('games').doc(gameId);
+    const gameRef = dbAdmin!.collection('games').doc(gameId);
     const playerRef = gameRef.collection('players').doc(playerId);
     const enemyRef = gameRef.collection('enemies').doc(enemyId);
 
     // Транзакция, чтобы данные не разошлись, если бьют двое
-    await dbAdmin.runTransaction(async (t) => {
-      const pDoc = await t.get(playerRef);
-      const eDoc = await t.get(enemyRef);
+    await dbAdmin!.runTransaction(async (t: Transaction) => {
+      const pDoc = await t.get(playerRef) as unknown as DocumentSnapshot;
+      const eDoc = await t.get(enemyRef) as unknown as DocumentSnapshot;
 
       if (!eDoc.exists || !pDoc.exists) return; // Враг уже мертв или глюк
 

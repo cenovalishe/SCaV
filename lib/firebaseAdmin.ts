@@ -1,6 +1,10 @@
 import admin from 'firebase-admin';
 
-if (!admin.apps.length) {
+// Инициализация Firebase Admin только если есть конфигурация
+if (!admin.apps.length &&
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY) {
   admin.initializeApp({
     credential: admin.credential.cert({
       projectId: process.env.FIREBASE_PROJECT_ID,
@@ -11,4 +15,5 @@ if (!admin.apps.length) {
   });
 }
 
-export const dbAdmin = admin.firestore();
+// Экспортируем dbAdmin только если Firebase инициализирован
+export const dbAdmin = admin.apps.length > 0 ? admin.firestore() : null as any;

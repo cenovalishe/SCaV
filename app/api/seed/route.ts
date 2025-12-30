@@ -3,6 +3,13 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { NextResponse } from 'next/server';
 
 export async function GET() {
+  // Проверяем, инициализирован ли Firebase
+  if (!dbAdmin) {
+    return NextResponse.json({
+      error: "Firebase not configured. Please set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY environment variables."
+    }, { status: 503 });
+  }
+
   const gameId = 'game_alpha';
   const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
 
@@ -15,7 +22,7 @@ export async function GET() {
 
   try {
     const batch = dbAdmin.batch();
-    
+
     initialEnemies.forEach((enemy) => {
       const docRef = enemiesRef.doc(enemy.id);
       batch.set(docRef, enemy);
