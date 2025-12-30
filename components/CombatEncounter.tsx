@@ -23,7 +23,7 @@ export default function CombatEncounter({ gameId, playerId, enemyId, enemyHp, on
   const TARGET_START = 40; // Начало зеленой зоны (%)
   const TARGET_WIDTH = 20; // Ширина зоны (%)
   
-  const reqRef = useRef<number>();
+  const reqRef = useRef<number>(0);
 
   useEffect(() => {
     const animate = () => {
