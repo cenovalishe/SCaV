@@ -154,6 +154,7 @@ export default function GameBoard() {
 
   // Текущая выносливость из Firebase
   const currentStamina = player?.stats?.stamina ?? DEFAULT_STATS.stamina;
+  const currentStealth = player?.stats?.stealth ?? DEFAULT_STATS.stealth;
   const maxStamina = player?.stats?.maxStamina ?? DEFAULT_STATS.maxStamina;
 
   // Фильтруем врагов и игроков для текущей локации камеры
