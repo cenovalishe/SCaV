@@ -46,10 +46,11 @@ export default function GameBoard() {
     init();
   }, []);
 
-  console.log("Статус загрузки:", { playerId, loading, hasPlayer: !!player });
 
   // 2. Получение данных игры
   const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
+  
+  console.log("Статус загрузки:", { playerId, loading, hasPlayer: !!player });
 
   // 3. ОПРЕДЕЛЯЕМ combatEnemy ЗДЕСЬ (после хука)
   const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
