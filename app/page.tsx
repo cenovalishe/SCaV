@@ -451,7 +451,7 @@ export default function GameBoard() {
         <EncounterSystem
           animatronicName={encounter.enemyName}
           animatronicType={encounter.enemyType}
-          playerStealth={currentStealth}
+          playerStealth={player?.stats?.stealth ?? DEFAULT_STATS.stealth}
           onComplete={handleEncounterComplete}
           onStaminaReset={handleStaminaReset}
         />
