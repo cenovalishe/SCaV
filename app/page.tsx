@@ -150,7 +150,7 @@ export default function GameBoard() {
   }, []);
 
   // Получаем данные текущего узла для камеры
-  const currentNodeData = player ? getNodeById(player.currentNode) : null;
+  const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
 
   // Текущая выносливость из Firebase
   const currentStamina = player?.stats?.stamina ?? DEFAULT_STATS.stamina;
@@ -367,7 +367,7 @@ export default function GameBoard() {
           {/* Панель действий поверх камеры */}
           <div className="absolute bottom-4 left-4 w-64 z-20">
             <ActionPanel
-              currentNode={currentNodeData}
+              currentNode={currentNodeData ?? null}
               currentStamina={currentStamina}
               isLooting={isLooting}
               canLoot={currentStamina >= 1}
