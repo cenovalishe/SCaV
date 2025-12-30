@@ -24,16 +24,15 @@ const ROOM_IMAGES: Record<string, string> = {
 };
 
 export default function GameBoard() {
-  // Заменяем константу на состояние
+  const [activeCam, setActiveCam] = useState<string | null>("node_04");
   const [playerId, setPlayerId] = useState<string | null>(null);
   const GAME_ID = 'game_alpha';
 
+  // 1. Инициализация игрока (твой useEffect)
   useEffect(() => {
     async function init() {
-      // Пытаемся достать ID из памяти браузера
       const savedId = localStorage.getItem('scav_player_id');
       const result = await getOrCreatePlayer(GAME_ID, savedId);
-      
       if (result.success && result.playerId) {
         localStorage.setItem('scav_player_id', result.playerId);
         setPlayerId(result.playerId);
@@ -42,10 +41,13 @@ export default function GameBoard() {
     init();
   }, []);
 
-  // Передаем динамический playerId в хук useGame
-  const { player, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
+  // 2. Получение данных игры
+  const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
 
-  // Пока ID грузится, показываем экран загрузки
+  // 3. ОПРЕДЕЛЯЕМ combatEnemy ЗДЕСЬ (после хука)
+  const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
+
+  // 4. Проверка загрузки
   if (!playerId || loading || !player) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center text-green-500 font-mono">
@@ -80,9 +82,9 @@ export default function GameBoard() {
 	  
 	  {/* --- UI LAYER: Combat Overlay --- */}
       {isCombat && combatEnemy && (
-        <CombatEncounter 
+		<CombatEncounter 
           gameId={GAME_ID}
-          playerId={playerId}
+          playerId={playerId} // Не забудь, что здесь теперь маленькие буквы
           enemyId={combatEnemy.id}
           enemyHp={combatEnemy.hp}
         />
