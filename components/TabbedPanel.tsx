@@ -3,54 +3,14 @@
  * FILE MANIFEST: components/TabbedPanel.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Контейнер с вкладками для правой панели UI
+ * PURPOSE: Контейнер с вкладками для правой панели UI (REDESIGNED v2.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
+ * │ FEATURES v2.0                                                               │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ DEFAULT EXPORT:                                                             │
- * │   TabbedPanel         - React компонент контейнера вкладок                 │
- * │                                                                             │
- * │ PROPS (TabbedPanelProps):                                                   │
- * │   stats               - CharacterStats - статы персонажа                   │
- * │   playerName          - string - имя игрока                                │
- * │   equipment           - Equipment - экипировка и инвентарь                 │
- * │   selectedNode        - MapNodeData | null - выбранная нода на карте       │
- * │   animatronics        - AnimatronicState[] - состояние аниматроников       │
- * │   players             - PlayerState[] - все игроки в игре                  │
- * │   gameLog             - GameLogEntry[] - лог игровых событий               │
- * │   currentPlayerId     - string - ID текущего игрока                        │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   react           → useState                                               │
- * │   ./CharacterTab  → default (CharacterTab)                                 │
- * │   ./InventoryTab  → default (InventoryTab)                                 │
- * │   ./InfoTab       → default (InfoTab)                                      │
- * │   @/lib/types     → CharacterStats, Equipment, GameLogEntry, etc           │
- * │   @/lib/mapData   → MapNodeData                                            │
- * │                                                                             │
- * │ IMPORTED BY:                                                                │
- * │   app/page.tsx    → используется в главной странице игры                   │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ UI STRUCTURE                                                                │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │   ┌───────────────────────────────────────┐                                │
- * │   │ ═══════════════════════════════════ │  ← декоративный заголовок       │
- * │   ├───────────┬───────────┬─────────────┤                                  │
- * │   │ ПЕРСОНАЖ  │ ИНВЕНТАРЬ │ ИНФОРМАЦИЯ  │  ← вкладки (TabType)            │
- * │   ├───────────┴───────────┴─────────────┤                                  │
- * │   │                                     │                                  │
- * │   │    [Контент активной вкладки]       │  ← CharacterTab/Inventory/Info  │
- * │   │                                     │                                  │
- * │   └─────────────────────────────────────┘                                  │
- * │                                                                             │
- * │ TABS: character (ПЕРСОНАЖ), inventory (ИНВЕНТАРЬ), info (ИНФОРМАЦИЯ)       │
+ * │ - Стилизованные вкладки с анимациями                                       │
+ * │ - Поддержка onEquipmentChange для InventoryTab                             │
+ * │ - Улучшенный визуальный дизайн                                             │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -71,6 +31,7 @@ interface TabbedPanelProps {
   stats: CharacterStats;
   playerName: string;
   equipment: Equipment;
+  onEquipmentChange?: (newEquipment: Equipment) => void; // ★ Новый callback
   selectedNode: MapNodeData | null;
   animatronics: AnimatronicState[];
   players: PlayerState[];
@@ -78,16 +39,17 @@ interface TabbedPanelProps {
   currentPlayerId: string;
 }
 
-const TABS: { id: TabType; label: string }[] = [
-  { id: 'character', label: 'ПЕРСОНАЖ' },
-  { id: 'inventory', label: 'ИНВЕНТАРЬ' },
-  { id: 'info', label: 'ИНФОРМАЦИЯ' }
+const TABS: { id: TabType; label: string; icon: string }[] = [
+  { id: 'character', label: 'ПЕРСОНАЖ', icon: '👤' },
+  { id: 'inventory', label: 'ИНВЕНТАРЬ', icon: '🎒' },
+  { id: 'info', label: 'ИНФОРМАЦИЯ', icon: '📋' }
 ];
 
 export default function TabbedPanel({
   stats,
   playerName,
   equipment,
+  onEquipmentChange,
   selectedNode,
   animatronics,
   players,
@@ -97,30 +59,34 @@ export default function TabbedPanel({
   const [activeTab, setActiveTab] = useState<TabType>('character');
 
   return (
-    <div className="bg-black border border-white/20 flex flex-col h-full">
+    <div className="bg-gradient-to-b from-zinc-900 to-black border border-white/20 flex flex-col h-full rounded-lg overflow-hidden">
       {/* Заголовок панели с декоративными линиями */}
-      <div className="flex items-center border-b border-white/20">
-        <div className="flex-1 h-px bg-white/20" />
-        <div className="px-2 h-8 border-x border-white/20" />
-        <div className="flex-1 h-px bg-white/20" />
+      <div className="flex items-center border-b border-white/10 bg-black/50">
+        <div className="flex-1 h-px bg-gradient-to-r from-transparent to-white/20" />
+        <div className="px-4 py-2">
+          <div className="w-3 h-3 border border-red-500/50 rotate-45" />
+        </div>
+        <div className="flex-1 h-px bg-gradient-to-l from-transparent to-white/20" />
       </div>
 
       {/* Вкладки */}
-      <div className="flex border-b border-white/20">
+      <div className="flex border-b border-white/10 bg-black/30">
         {TABS.map(tab => (
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`
-              flex-1 py-2 px-2 font-mono text-xs tracking-wider
-              transition-all border-r border-white/10 last:border-r-0
+              flex-1 py-3 px-2 font-mono text-xs tracking-wider
+              transition-all duration-200 border-r border-white/5 last:border-r-0
+              flex items-center justify-center gap-2
               ${activeTab === tab.id
-                ? 'bg-white/10 text-white border-b-2 border-b-red-500'
+                ? 'bg-white/10 text-white border-b-2 border-b-red-500 shadow-inner'
                 : 'text-white/50 hover:text-white/80 hover:bg-white/5'
               }
             `}
           >
-            {tab.label}
+            <span className={activeTab === tab.id ? 'scale-110' : 'opacity-50'}>{tab.icon}</span>
+            <span className="hidden sm:inline">{tab.label}</span>
           </button>
         ))}
       </div>
@@ -131,7 +97,10 @@ export default function TabbedPanel({
           <CharacterTab stats={stats} playerName={playerName} />
         )}
         {activeTab === 'inventory' && (
-          <InventoryTab equipment={equipment} />
+          <InventoryTab
+            equipment={equipment}
+            onEquipmentChange={onEquipmentChange}  // ★ Передаём callback
+          />
         )}
         {activeTab === 'info' && (
           <InfoTab

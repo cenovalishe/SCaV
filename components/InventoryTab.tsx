@@ -3,7 +3,18 @@
  * FILE MANIFEST: components/InventoryTab.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Вкладка инвентаря в стиле Escape From Tarkov
+ * PURPOSE: Вкладка инвентаря в стиле EFT с drag-and-drop (REDESIGNED v2.0)
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ FEATURES                                                                    │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ - Увеличенные слоты (12x12 вместо 7x7) и иконки                            │
+ * │ - Прокрутка колёсиком с custom scrollbar                                   │
+ * │ - Drag-and-drop перетаскивание предметов между слотами                     │
+ * │ - ДИНАМИЧЕСКИЕ слоты контейнеров (появляются только с предметами)          │
+ * │ - Интерактивные hover/drag эффекты                                         │
+ * │ - Подсветка валидных целей при перетаскивании                              │
+ * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
  * │ EXPORTS OVERVIEW                                                            │
@@ -13,56 +24,8 @@
  * │                                                                             │
  * │ PROPS (InventoryTabProps):                                                  │
  * │   equipment           - Equipment - вся экипировка и контейнеры            │
+ * │   onEquipmentChange?  - (Equipment) => void - коллбэк изменения            │
  * │   onUseItem?          - (slotType, index?) => void - коллбэк использования │
- * │                                                                             │
- * │ INTERNAL COMPONENTS:                                                        │
- * │   EquipmentSlot       - Одиночный слот экипировки (шлем, броня и т.д.)     │
- * │   ContainerSlots      - Контейнер с ячейками (разгрузка, сумка, рюкзак)    │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   react          → useState                                                │
- * │   @/lib/types    → Equipment, Container                                    │
- * │   @/lib/itemData → getItemById, calculateTotalValue, formatRoubles         │
- * │                                                                             │
- * │ IMPORTED BY:                                                                │
- * │   ./TabbedPanel.tsx → используется как содержимое вкладки "ИНВЕНТАРЬ"      │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ UI LAYOUT (EFT-style)                                                       │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │                                                                             │
- * │   ┌─────────────────────────────────────────────────────────────┐          │
- * │   │ ИНВЕНТАРЬ                                                   │          │
- * │   ├─────────────┬───────────┬───────────────────────────────────┤          │
- * │   │ ЭКИПИРОВКА  │  АВАТАР   │         КОНТЕЙНЕРЫ                │          │
- * │   ├─────────────┤           ├───────────────────────────────────┤          │
- * │   │[сп1][сп2][3]│   ┌───┐   │ разг [■][■][■][■]                 │ RED      │
- * │   │   [шлем]    │   │ o │   │ сумк [■][■][■]                    │ BLUE     │
- * │   │   [брн]     │   │/|\│   │ рюкз [■][■][■][■][■][■][■][■]     │ ORANGE   │
- * │   │   [одеж]    │   │/ \│   │                                   │          │
- * │   │[к1][к2][3]4]│   └───┘   │                                   │          │
- * │   │  [оружие]   │           │                                   │          │
- * │   │[приц][лцу]..│           │                                   │          │
- * │   ├─────────────┴───────────┴───────────────────────────────────┤          │
- * │   │                                     Ценность: 15 000 ₽      │          │
- * │   └─────────────────────────────────────────────────────────────┘          │
- * │                                                                             │
- * │ SLOT TYPES:                                                                 │
- * │   specials[3]  - спец слоты (верх)        pockets[4] - карманы             │
- * │   helmet       - шлем                      weapon    - оружие              │
- * │   armor        - броня                     scope     - прицел              │
- * │   clothes      - одежда                    tactical  - ЛЦУ                 │
- * │                                            suppressor- глушитель           │
- * │                                                                             │
- * │ CONTAINERS (цветовая схема):                                               │
- * │   rig (красный)      - разгрузка, 4 слота                                  │
- * │   bag (синий)        - сумка, 3 слота                                      │
- * │   backpack (оранж)   - рюкзак, 8 слотов                                    │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -70,96 +33,206 @@
 
 'use client'
 
-import { useState } from 'react';
+import { useState, useCallback, DragEvent } from 'react';
 import { Equipment, Container } from '@/lib/types';
 import { getItemById, calculateTotalValue, formatRoubles } from '@/lib/itemData';
 
 interface InventoryTabProps {
   equipment: Equipment;
+  onEquipmentChange?: (newEquipment: Equipment) => void;
   onUseItem?: (slotType: string, index?: number) => void;
 }
 
-// Компонент слота экипировки
+// Тип для источника перетаскивания
+interface DragSource {
+  type: 'equipment' | 'container' | 'pocket';
+  slot?: string;
+  containerType?: 'rig' | 'bag' | 'backpack';
+  index?: number;
+  itemId: string;
+}
+
+// Компонент слота экипировки (УВЕЛИЧЕННЫЙ)
 function EquipmentSlot({
   label,
+  slotType,
   itemId,
   className = '',
-  onClick
+  size = 'normal',
+  onDragStart,
+  onDragOver,
+  onDrop,
+  isDragOver
 }: {
   label: string;
+  slotType: string;
   itemId: string | null;
   className?: string;
-  onClick?: () => void;
+  size?: 'small' | 'normal' | 'large';
+  onDragStart?: (e: DragEvent, itemId: string, slotType: string) => void;
+  onDragOver?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent, slotType: string) => void;
+  isDragOver?: boolean;
 }) {
   const item = itemId ? getItemById(itemId) : null;
 
+  const sizeClasses = {
+    small: 'w-11 h-11',
+    normal: 'w-14 h-14',
+    large: 'w-16 h-16'
+  };
+
+  const iconSizes = {
+    small: 'text-xl',
+    normal: 'text-2xl',
+    large: 'text-3xl'
+  };
+
   return (
-    <button
-      onClick={onClick}
+    <div
+      draggable={!!item}
+      onDragStart={(e) => item && onDragStart?.(e, itemId!, slotType)}
+      onDragOver={onDragOver}
+      onDrop={(e) => onDrop?.(e, slotType)}
       className={`
-        border border-white/30 bg-black/50
+        ${sizeClasses[size]}
+        border-2 ${isDragOver ? 'border-green-400 bg-green-900/40 scale-105' : 'border-white/20'}
+        bg-gradient-to-br from-zinc-900 to-zinc-800
         flex items-center justify-center
-        hover:border-white/60 hover:bg-white/5
-        transition-all cursor-pointer
+        hover:border-white/40 hover:bg-zinc-700/50
+        active:scale-95
+        transition-all duration-150 cursor-pointer
+        rounded-lg shadow-lg shadow-black/30
+        ${item ? 'hover:scale-105 hover:shadow-xl' : ''}
         ${className}
       `}
-      title={item ? `${item.nameRu} (${formatRoubles(item.value)})` : label}
+      title={item ? `${item.nameRu}\n${formatRoubles(item.value)}` : label}
     >
       {item ? (
-        <span className="text-lg">{item.icon}</span>
+        <span className={`${iconSizes[size]} drop-shadow-lg`}>{item.icon}</span>
       ) : (
-        <span className="text-white/30 text-xs font-mono">{label}</span>
+        <span className="text-white/20 text-[9px] font-mono uppercase text-center leading-tight px-1">
+          {label}
+        </span>
       )}
-    </button>
+    </div>
   );
 }
 
-// Компонент контейнера (разгрузка, сумка, рюкзак)
-function ContainerSlots({
+// Компонент контейнера (разгрузка, сумка, рюкзак) - ДИНАМИЧЕСКИЙ
+function ContainerSection({
   container,
+  containerType,
   label,
+  icon,
   color,
-  maxSlots
+  maxSlots,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  dragOverIndex
 }: {
   container: Container | null;
+  containerType: 'rig' | 'bag' | 'backpack';
   label: string;
-  color: string;
+  icon: string;
+  color: 'red' | 'blue' | 'orange';
   maxSlots: number;
+  onDragStart?: (e: DragEvent, itemId: string, containerType: string, index: number) => void;
+  onDragOver?: (e: DragEvent, index: number) => void;
+  onDrop?: (e: DragEvent, containerType: string, index: number) => void;
+  dragOverIndex?: number;
 }) {
-  const slots = container?.items || Array(maxSlots).fill(null);
-  const bgColor = color === 'red' ? 'bg-red-900/40 border-red-500/50' :
-                  color === 'blue' ? 'bg-blue-900/40 border-blue-500/50' :
-                  'bg-orange-900/40 border-orange-500/50';
-  const slotBg = color === 'red' ? 'bg-red-800/50' :
-                 color === 'blue' ? 'bg-blue-800/50' :
-                 'bg-orange-800/50';
+  // ★ ДИНАМИКА: Если нет контейнера - НЕ отображаем секцию
+  if (!container) return null;
+
+  const slots = container.items || Array(maxSlots).fill(null);
+  const filledCount = slots.filter(s => s !== null).length;
+
+  const colorClasses = {
+    red: {
+      bg: 'from-red-950/70 to-red-900/40',
+      border: 'border-red-500/50',
+      header: 'bg-red-900/60 border-red-500/40',
+      slot: 'from-red-900/50 to-red-800/30 border-red-500/40',
+      slotHover: 'hover:border-red-400 hover:bg-red-800/40',
+      accent: 'text-red-400'
+    },
+    blue: {
+      bg: 'from-blue-950/70 to-blue-900/40',
+      border: 'border-blue-500/50',
+      header: 'bg-blue-900/60 border-blue-500/40',
+      slot: 'from-blue-900/50 to-blue-800/30 border-blue-500/40',
+      slotHover: 'hover:border-blue-400 hover:bg-blue-800/40',
+      accent: 'text-blue-400'
+    },
+    orange: {
+      bg: 'from-orange-950/70 to-orange-900/40',
+      border: 'border-orange-500/50',
+      header: 'bg-orange-900/60 border-orange-500/40',
+      slot: 'from-orange-900/50 to-orange-800/30 border-orange-500/40',
+      slotHover: 'hover:border-orange-400 hover:bg-orange-800/40',
+      accent: 'text-orange-400'
+    }
+  };
+
+  const c = colorClasses[color];
 
   return (
-    <div className={`border ${bgColor} p-1`}>
-      <div className="flex items-start gap-1">
-        <div className={`${slotBg} px-1.5 py-0.5 text-xs font-mono text-white/80 self-stretch flex items-center`}>
-          {label}
-        </div>
-        <div className="flex flex-wrap gap-0.5 flex-1">
-          {slots.slice(0, maxSlots).map((itemId, idx) => {
-            const item = itemId ? getItemById(itemId) : null;
-            return (
-              <div
-                key={idx}
-                className={`w-7 h-7 ${slotBg} border border-white/20 flex items-center justify-center`}
-                title={item ? `${item.nameRu} (${formatRoubles(item.value)})` : `Слот ${idx + 1}`}
-              >
-                {item && <span className="text-sm">{item.icon}</span>}
-              </div>
-            );
-          })}
-        </div>
+    <div className={`border-2 ${c.border} rounded-xl overflow-hidden bg-gradient-to-b ${c.bg} shadow-lg`}>
+      {/* Заголовок контейнера */}
+      <div className={`${c.header} px-3 py-2 border-b flex items-center gap-2`}>
+        <span className="text-xl">{icon}</span>
+        <span className="text-white/90 font-mono text-sm uppercase tracking-wider font-bold">{label}</span>
+        <span className={`${c.accent} font-mono text-xs ml-auto bg-black/30 px-2 py-0.5 rounded`}>
+          {filledCount}/{maxSlots}
+        </span>
+      </div>
+
+      {/* Слоты - УВЕЛИЧЕННЫЕ */}
+      <div className="p-3 flex flex-wrap gap-2 justify-center">
+        {slots.slice(0, maxSlots).map((itemId, idx) => {
+          const item = itemId ? getItemById(itemId) : null;
+          const isOver = dragOverIndex === idx;
+
+          return (
+            <div
+              key={idx}
+              draggable={!!item}
+              onDragStart={(e) => item && onDragStart?.(e, itemId!, containerType, idx)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                onDragOver?.(e, idx);
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                onDrop?.(e, containerType, idx);
+              }}
+              className={`
+                w-14 h-14 rounded-lg
+                bg-gradient-to-br ${c.slot}
+                border-2 ${isOver ? 'border-green-400 bg-green-900/40 scale-110' : c.border}
+                ${c.slotHover}
+                flex items-center justify-center
+                transition-all duration-150 cursor-pointer
+                hover:scale-105 shadow-inner
+                active:scale-95
+              `}
+              title={item ? `${item.nameRu} (${formatRoubles(item.value)})` : `Слот ${idx + 1}`}
+            >
+              {item && <span className="text-2xl drop-shadow-md">{item.icon}</span>}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
 }
 
-export default function InventoryTab({ equipment, onUseItem }: InventoryTabProps) {
+export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }: InventoryTabProps) {
+  const [dragSource, setDragSource] = useState<DragSource | null>(null);
+  const [dragOverTarget, setDragOverTarget] = useState<{ type: string; index?: number } | null>(null);
+
   // Расчет общей ценности
   const allItems: (string | null)[] = [
     ...(equipment.pockets || []),
@@ -169,106 +242,282 @@ export default function InventoryTab({ equipment, onUseItem }: InventoryTabProps
   ];
   const totalValue = calculateTotalValue(allItems);
 
+  // Обработчики drag-and-drop
+  const handleDragStart = useCallback((e: DragEvent, itemId: string, source: string, index?: number) => {
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', itemId);
+
+    if (['rig', 'bag', 'backpack'].includes(source)) {
+      setDragSource({ type: 'container', containerType: source as 'rig' | 'bag' | 'backpack', index, itemId });
+    } else if (source.startsWith('pocket')) {
+      setDragSource({ type: 'pocket', index: parseInt(source.replace('pocket', '')), itemId });
+    } else {
+      setDragSource({ type: 'equipment', slot: source, itemId });
+    }
+  }, []);
+
+  const handleDragOver = useCallback((e: DragEvent, target: string, index?: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverTarget({ type: target, index });
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDragSource(null);
+    setDragOverTarget(null);
+  }, []);
+
+  const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
+    e.preventDefault();
+
+    if (!dragSource || !onEquipmentChange) {
+      handleDragEnd();
+      return;
+    }
+
+    const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+
+    // Удаляем из источника
+    if (dragSource.type === 'container' && dragSource.containerType) {
+      const container = newEquipment[dragSource.containerType];
+      if (container && dragSource.index !== undefined) {
+        container.items[dragSource.index] = null;
+      }
+    } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
+      newEquipment.pockets[dragSource.index] = null;
+    } else if (dragSource.type === 'equipment' && dragSource.slot) {
+      (newEquipment as any)[dragSource.slot] = null;
+    }
+
+    // Добавляем в цель
+    if (['rig', 'bag', 'backpack'].includes(target)) {
+      const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
+      if (container && index !== undefined) {
+        container.items[index] = dragSource.itemId;
+      }
+    } else if (target.startsWith('pocket')) {
+      const pocketIndex = parseInt(target.replace('pocket', ''));
+      newEquipment.pockets[pocketIndex] = dragSource.itemId;
+    } else {
+      (newEquipment as any)[target] = dragSource.itemId;
+    }
+
+    onEquipmentChange(newEquipment);
+    handleDragEnd();
+  }, [dragSource, equipment, onEquipmentChange, handleDragEnd]);
+
+  // Проверяем наличие контейнеров
+  const hasRig = equipment.rig !== null;
+  const hasBag = equipment.bag !== null;
+  const hasBackpack = equipment.backpack !== null;
+  const hasAnyContainer = hasRig || hasBag || hasBackpack;
+
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden" onDragEnd={handleDragEnd}>
       {/* Заголовок */}
-      <div className="border-b border-white/20 pb-2 mb-3">
-        <h3 className="text-white font-mono text-sm tracking-wider">ИНВЕНТАРЬ</h3>
+      <div className="relative border-b border-white/20 pb-3 mb-3 flex-shrink-0">
+        <div className="absolute left-0 top-1/2 w-3 h-3 border border-amber-500/50 rotate-45 -translate-y-1/2" />
+        <h3 className="text-white font-mono text-sm tracking-[0.3em] pl-6 uppercase">
+          Инвентарь
+        </h3>
+        <div className="absolute right-0 top-0 h-full w-16 bg-gradient-to-l from-amber-900/20 to-transparent" />
       </div>
 
-      <div className="flex gap-2 flex-1 overflow-hidden">
-        {/* Левая часть - экипировка */}
-        <div className="flex flex-col gap-1 w-28">
-          {/* Спец слоты */}
-          <div className="flex gap-0.5">
-            <EquipmentSlot label="спец1" itemId={equipment.specials?.[0] || null} className="w-8 h-8" />
-            <EquipmentSlot label="спец2" itemId={equipment.specials?.[1] || null} className="w-8 h-8" />
-            <EquipmentSlot label="спец3" itemId={equipment.specials?.[2] || null} className="w-8 h-8" />
-          </div>
+      {/* Основной контент с ПРОКРУТКОЙ */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
+        <div className="flex gap-4">
+          {/* ЛЕВАЯ ЧАСТЬ - Экипировка */}
+          <div className="flex flex-col items-center gap-2 flex-shrink-0">
+            {/* Спец слоты */}
+            <div className="flex gap-1.5">
+              {[0, 1, 2].map(i => (
+                <EquipmentSlot
+                  key={i}
+                  label={`СП${i + 1}`}
+                  slotType={`special${i}`}
+                  itemId={equipment.specials?.[i] || null}
+                  size="small"
+                  onDragStart={(e, itemId) => handleDragStart(e, itemId, `special${i}`)}
+                  onDragOver={(e) => handleDragOver(e, `special${i}`)}
+                  onDrop={(e) => handleDrop(e, `special${i}`)}
+                  isDragOver={dragOverTarget?.type === `special${i}`}
+                />
+              ))}
+            </div>
 
-          {/* Шлем */}
-          <EquipmentSlot label="шлем" itemId={equipment.helmet} className="w-14 h-8" />
+            {/* Шлем, Броня, Одежда */}
+            <EquipmentSlot
+              label="ШЛЕМ"
+              slotType="helmet"
+              itemId={equipment.helmet}
+              size="large"
+              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'helmet')}
+              onDragOver={(e) => handleDragOver(e, 'helmet')}
+              onDrop={(e) => handleDrop(e, 'helmet')}
+              isDragOver={dragOverTarget?.type === 'helmet'}
+            />
+            <EquipmentSlot
+              label="БРОНЯ"
+              slotType="armor"
+              itemId={equipment.armor}
+              size="large"
+              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'armor')}
+              onDragOver={(e) => handleDragOver(e, 'armor')}
+              onDrop={(e) => handleDrop(e, 'armor')}
+              isDragOver={dragOverTarget?.type === 'armor'}
+            />
+            <EquipmentSlot
+              label="ОДЕЖДА"
+              slotType="clothes"
+              itemId={equipment.clothes}
+              size="large"
+              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'clothes')}
+              onDragOver={(e) => handleDragOver(e, 'clothes')}
+              onDrop={(e) => handleDrop(e, 'clothes')}
+              isDragOver={dragOverTarget?.type === 'clothes'}
+            />
 
-          {/* Броня */}
-          <EquipmentSlot label="брн" itemId={equipment.armor} className="w-14 h-8" />
+            {/* Карманы */}
+            <div className="flex gap-1.5 mt-1">
+              {[0, 1, 2, 3].map(i => (
+                <EquipmentSlot
+                  key={i}
+                  label={`К${i + 1}`}
+                  slotType={`pocket${i}`}
+                  itemId={equipment.pockets?.[i] || null}
+                  size="small"
+                  onDragStart={(e, itemId) => handleDragStart(e, itemId, `pocket${i}`)}
+                  onDragOver={(e) => handleDragOver(e, `pocket${i}`)}
+                  onDrop={(e) => handleDrop(e, `pocket${i}`)}
+                  isDragOver={dragOverTarget?.type === `pocket${i}`}
+                />
+              ))}
+            </div>
 
-          {/* Одежда */}
-          <EquipmentSlot label="одеж" itemId={equipment.clothes} className="w-14 h-8" />
-
-          {/* Карманы */}
-          <div className="flex gap-0.5">
-            {[0, 1, 2, 3].map(i => (
+            {/* Оружие */}
+            <div className="w-full mt-2">
               <EquipmentSlot
-                key={i}
-                label="карм"
-                itemId={equipment.pockets?.[i] || null}
-                className="w-7 h-7"
+                label="ОРУЖИЕ"
+                slotType="weapon"
+                itemId={equipment.weapon}
+                size="large"
+                className="w-full"
+                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'weapon')}
+                onDragOver={(e) => handleDragOver(e, 'weapon')}
+                onDrop={(e) => handleDrop(e, 'weapon')}
+                isDragOver={dragOverTarget?.type === 'weapon'}
               />
-            ))}
+            </div>
+
+            {/* Обвесы оружия */}
+            <div className="flex gap-1.5">
+              <EquipmentSlot
+                label="ПРИЦ"
+                slotType="scope"
+                itemId={equipment.scope}
+                size="small"
+                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'scope')}
+                onDragOver={(e) => handleDragOver(e, 'scope')}
+                onDrop={(e) => handleDrop(e, 'scope')}
+                isDragOver={dragOverTarget?.type === 'scope'}
+              />
+              <EquipmentSlot
+                label="ЛЦУ"
+                slotType="tactical"
+                itemId={equipment.tactical}
+                size="small"
+                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'tactical')}
+                onDragOver={(e) => handleDragOver(e, 'tactical')}
+                onDrop={(e) => handleDrop(e, 'tactical')}
+                isDragOver={dragOverTarget?.type === 'tactical'}
+              />
+              <EquipmentSlot
+                label="ГЛУШ"
+                slotType="suppressor"
+                itemId={equipment.suppressor}
+                size="small"
+                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'suppressor')}
+                onDragOver={(e) => handleDragOver(e, 'suppressor')}
+                onDrop={(e) => handleDrop(e, 'suppressor')}
+                isDragOver={dragOverTarget?.type === 'suppressor'}
+              />
+            </div>
           </div>
 
-          {/* Оружие */}
-          <EquipmentSlot label="оружие" itemId={equipment.weapon} className="w-full h-8" />
+          {/* ПРАВАЯ ЧАСТЬ - Контейнеры (ДИНАМИЧЕСКИЕ) */}
+          <div className="flex-1 flex flex-col gap-3 min-w-0">
+            {/* Разгрузка - появляется только если есть */}
+            <ContainerSection
+              container={equipment.rig}
+              containerType="rig"
+              label="Разгрузка"
+              icon="🎽"
+              color="red"
+              maxSlots={4}
+              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
+              onDragOver={(e, idx) => handleDragOver(e, 'rig', idx)}
+              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
+              dragOverIndex={dragOverTarget?.type === 'rig' ? dragOverTarget.index : undefined}
+            />
 
-          {/* Обвесы */}
-          <div className="flex gap-0.5 text-[8px]">
-            <EquipmentSlot label="приц" itemId={equipment.scope} className="w-8 h-7" />
-            <EquipmentSlot label="лцу" itemId={equipment.tactical} className="flex-1 h-7" />
-            <EquipmentSlot label="глуш" itemId={equipment.suppressor} className="w-8 h-7" />
+            {/* Сумка - появляется только если есть */}
+            <ContainerSection
+              container={equipment.bag}
+              containerType="bag"
+              label="Сумка"
+              icon="👜"
+              color="blue"
+              maxSlots={3}
+              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
+              onDragOver={(e, idx) => handleDragOver(e, 'bag', idx)}
+              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
+              dragOverIndex={dragOverTarget?.type === 'bag' ? dragOverTarget.index : undefined}
+            />
+
+            {/* Рюкзак - появляется только если есть */}
+            <ContainerSection
+              container={equipment.backpack}
+              containerType="backpack"
+              label="Рюкзак"
+              icon="🎒"
+              color="orange"
+              maxSlots={8}
+              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
+              onDragOver={(e, idx) => handleDragOver(e, 'backpack', idx)}
+              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
+              dragOverIndex={dragOverTarget?.type === 'backpack' ? dragOverTarget.index : undefined}
+            />
+
+            {/* Если НЕТ контейнеров - подсказка */}
+            {!hasAnyContainer && (
+              <div className="flex-1 flex items-center justify-center min-h-[120px]">
+                <div className="text-center text-white/30 font-mono text-xs p-4 border-2 border-dashed border-white/10 rounded-xl">
+                  <div className="text-3xl mb-2 opacity-50">📦</div>
+                  <div className="text-white/40 font-bold">Нет контейнеров</div>
+                  <div className="text-[10px] mt-1 text-white/25">
+                    Найдите разгрузку, сумку или рюкзак
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-
-        {/* Центр - аватар персонажа */}
-        <div className="flex-shrink-0 w-16 flex items-center justify-center">
-          <div className="w-14 h-28 border border-white/20 bg-black/30 flex items-center justify-center">
-            <svg viewBox="0 0 40 80" className="w-10 h-20">
-              {/* Голова */}
-              <ellipse cx="20" cy="12" rx="8" ry="10" fill="none" stroke="white" strokeWidth="0.8" />
-              {/* Тело */}
-              <line x1="20" y1="22" x2="20" y2="50" stroke="white" strokeWidth="0.8" />
-              {/* Руки */}
-              <line x1="20" y1="28" x2="6" y2="42" stroke="white" strokeWidth="0.8" />
-              <line x1="20" y1="28" x2="34" y2="42" stroke="white" strokeWidth="0.8" />
-              {/* Ноги */}
-              <line x1="20" y1="50" x2="8" y2="72" stroke="white" strokeWidth="0.8" />
-              <line x1="20" y1="50" x2="32" y2="72" stroke="white" strokeWidth="0.8" />
-            </svg>
-          </div>
-        </div>
-
-        {/* Правая часть - контейнеры */}
-        <div className="flex flex-col gap-1 flex-1 min-w-0">
-          {/* Разгрузка (красные слоты) */}
-          <ContainerSlots
-            container={equipment.rig}
-            label="разг"
-            color="red"
-            maxSlots={4}
-          />
-
-          {/* Сумка (синие слоты) */}
-          <ContainerSlots
-            container={equipment.bag}
-            label="сумк"
-            color="blue"
-            maxSlots={3}
-          />
-
-          {/* Рюкзак (оранжевые слоты) */}
-          <ContainerSlots
-            container={equipment.backpack}
-            label="рюкз"
-            color="orange"
-            maxSlots={8}
-          />
         </div>
       </div>
 
-      {/* Ценность */}
-      <div className="mt-2 pt-2 border-t border-white/20 flex justify-end">
-        <div className="text-right">
-          <div className="text-white/50 text-xs font-mono">Ценность</div>
-          <div className="text-white font-mono text-lg">{formatRoubles(totalValue)}</div>
+      {/* Ценность - футер */}
+      <div className="mt-3 pt-3 border-t border-white/20 flex-shrink-0">
+        <div className="flex items-center justify-between p-2 bg-gradient-to-r from-amber-900/20 to-transparent rounded-lg">
+          <div className="flex items-center gap-2">
+            <span className="text-2xl">💰</span>
+            <span className="text-white/60 font-mono text-xs uppercase tracking-wider">
+              Общая ценность
+            </span>
+          </div>
+          <div className="text-right">
+            <div className="text-amber-400 font-mono text-xl font-bold tracking-wide drop-shadow-lg">
+              {formatRoubles(totalValue)}
+            </div>
+          </div>
         </div>
       </div>
     </div>

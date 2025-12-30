@@ -3,37 +3,16 @@
  * FILE MANIFEST: app/page.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Главная страница игры SCaV - точка входа и оркестрация компонентов
+ * PURPOSE: Главная страница игры SCaV (REDESIGNED v2.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
+ * │ FEATURES v2.0                                                               │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ DEFAULT EXPORT:                                                             │
- * │   GameBoard           - React компонент главной страницы                   │
- * │                                                                             │
- * │ CONSTANTS:                                                                  │
- * │   DEFAULT_STATS       - Дефолтные характеристики персонажа                 │
- * │   DEFAULT_EQUIPMENT   - Стартовая экипировка (фонарик, аптечка, бинт)      │
- * │   GAME_ID             - 'game_alpha' - ID игровой сессии                   │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   react                      → useState, useEffect, useCallback            │
- * │   @/hooks/useGame            → useGame (Firebase realtime)                 │
- * │   @/app/actions/gameActions  → getOrCreatePlayer, movePlayer, etc          │
- * │   @/lib/mapData              → MAP_NODES_DATA, MapNodeData, getNodeById    │
- * │   @/lib/types                → CharacterStats, Equipment, etc              │
- * │                                                                             │
- * │ COMPONENTS USED:                                                            │
- * │   @/components/TabbedPanel    → правая верхняя панель (вкладки)            │
- * │   @/components/GameMap        → правая нижняя панель (SVG карта)           │
- * │   @/components/CameraView     → левая панель (камера наблюдения)           │
- * │   @/components/CombatEncounter → оверлей боя                               │
- * │   @/components/EncounterSystem → система встречи с аниматроником           │
- * │   @/components/ActionPanel    → панель действий (лутинг, ожидание)         │
+ * │ - viewingNode для переключения камеры на любую ноду                        │
+ * │ - onCameraSwitch callback для карты                                        │
+ * │ - Динамическая экипировка с обновлениями                                   │
+ * │ - Добавление лута в инвентарь при обыске                                   │
+ * │ - Улучшенный UI                                                            │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -46,6 +25,7 @@ import { useGame } from '@/hooks/useGame';
 import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot } from '@/app/actions/gameActions';
 import { MAP_NODES_DATA, MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
+import { getItemById } from '@/lib/itemData';
 
 // Компоненты
 import TabbedPanel from '@/components/TabbedPanel';
@@ -56,7 +36,7 @@ import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
 import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
 
-// Дефолтные значения для совместимости
+// Дефолтные значения
 const DEFAULT_STATS: CharacterStats = {
   attack: 5,
   defense: 3,
@@ -70,6 +50,7 @@ const DEFAULT_STATS: CharacterStats = {
   maxStamina: 7
 };
 
+// ★ Стартовая экипировка БЕЗ контейнеров (появятся при нахождении)
 const DEFAULT_EQUIPMENT: Equipment = {
   helmet: null,
   armor: null,
@@ -80,16 +61,9 @@ const DEFAULT_EQUIPMENT: Equipment = {
   scope: null,
   tactical: null,
   suppressor: null,
-  rig: {
-    id: 'rig_1',
-    type: 'rig',
-    name: 'Tactical Rig',
-    nameRu: 'Разгрузка',
-    slots: 4,
-    items: [null, null, null, null]
-  },
-  bag: null,
-  backpack: {
+  rig: null,      // ★ БЕЗ разгрузки по умолчанию
+  bag: null,      // ★ БЕЗ сумки по умолчанию
+  backpack: {     // Только рюкзак со стартовыми предметами
     id: 'bp_1',
     type: 'backpack',
     name: 'Backpack',
@@ -104,11 +78,18 @@ const GAME_ID = 'game_alpha';
 export default function GameBoard() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<MapNodeData | null>(null);
+  const [viewingNode, setViewingNode] = useState<MapNodeData | null>(null); // ★ Нода для просмотра камеры
   const [gameLog, setGameLog] = useState<GameLogEntry[]>([]);
 
   // Состояние выбора игрока
   const [needsSlotSelection, setNeedsSlotSelection] = useState(false);
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
+
+  // ★ Динамическая экипировка
+  const [equipment, setEquipment] = useState<Equipment>(DEFAULT_EQUIPMENT);
+
+  // ★ Найденный предмет (для анимации)
+  const [foundItem, setFoundItem] = useState<{ icon: string; name: string } | null>(null);
 
   // Состояние встречи с аниматроником
   const [encounter, setEncounter] = useState<{
@@ -117,19 +98,19 @@ export default function GameBoard() {
     enemyType: string;
     pendingMove: MapNodeData | null;
     staminaCost: number;
-    previousNode: string | null; // Для отступления
+    previousNode: string | null;
   } | null>(null);
 
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
 
-  // Функция добавления записи в лог (определена здесь для доступа в init)
+  // Функция добавления записи в лог
   const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
     setGameLog(prev => [...prev, {
       timestamp: Date.now(),
       message,
       type
-    }].slice(-50)); // Храним последние 50 записей
+    }].slice(-50));
   }, []);
 
   // Инициализация игрока
@@ -139,12 +120,10 @@ export default function GameBoard() {
       const result = await getOrCreatePlayer(GAME_ID, savedId);
 
       if (result.success && result.playerId) {
-        // Существующий игрок найден
         localStorage.setItem('scav_player_id', result.playerId);
         setPlayerId(result.playerId);
         addLogEntry('Подключение к системе...', 'system');
       } else if ((result as any).needsSlotSelection) {
-        // Нужно выбрать слот
         const slotsResult = await getTakenPlayerSlots(GAME_ID);
         if (slotsResult.success) {
           setTakenSlots(slotsResult.takenSlots);
@@ -165,7 +144,6 @@ export default function GameBoard() {
       setNeedsSlotSelection(false);
       addLogEntry(`Добро пожаловать, ${playerName}!`, 'system');
     } else {
-      // Слот уже занят, обновляем список
       const slotsResult = await getTakenPlayerSlots(GAME_ID);
       if (slotsResult.success) {
         setTakenSlots(slotsResult.takenSlots);
@@ -177,18 +155,14 @@ export default function GameBoard() {
   // Хук игры
   const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
 
-  // Определяем текущего врага для боя
   const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
-
-  // Ref для предотвращения дублирования проверки хода
   const isCheckingTurn = useRef(false);
 
-  // Проверка одновременных ходов - если все игроки истратили выносливость, начинаем новый ход
+  // Проверка одновременных ходов
   useEffect(() => {
     if (!playerId || loading || allPlayers.length === 0) return;
     if (isCheckingTurn.current) return;
 
-    // Проверяем, если у всех игроков выносливость 0
     const allExhausted = allPlayers.every(p => {
       if (p.status === 'DEAD') return true;
       return (p.stats?.stamina || 0) === 0;
@@ -196,8 +170,6 @@ export default function GameBoard() {
 
     if (allExhausted) {
       isCheckingTurn.current = true;
-
-      // Запускаем новый ход для всех
       startNewTurnForAll(GAME_ID).then((result) => {
         if (result.success) {
           addLogEntry('🎲 Новый ход! Выносливость восстановлена (1 + d6)', 'system');
@@ -209,28 +181,37 @@ export default function GameBoard() {
     }
   }, [playerId, loading, allPlayers, addLogEntry]);
 
-  // Получаем данные текущего узла для камеры
+  // Данные текущего узла
   const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
 
-  // Текущая выносливость из Firebase
+  // Статы из Firebase
   const currentStamina = player?.stats?.stamina ?? DEFAULT_STATS.stamina;
   const currentStealth = player?.stats?.stealth ?? DEFAULT_STATS.stealth;
   const maxStamina = player?.stats?.maxStamina ?? DEFAULT_STATS.maxStamina;
 
-  // Фильтруем врагов и игроков для текущей локации камеры
-  const enemiesAtCurrentNode = enemies
-    .filter(e => e.currentNode === player?.currentNode)
-    .map(e => e.type);
+  // ★ Определяем какую ноду показывать на камере
+  const cameraDisplayNode = viewingNode || currentNodeData;
+  const cameraNodeId = viewingNode?.id || player?.currentNode || '1';
 
-  const playersAtCurrentNode = allPlayers
-    .filter(p => p.currentNode === player?.currentNode)
+  // Фильтруем врагов и игроков для ПРОСМАТРИВАЕМОЙ ноды (не текущей)
+  const enemiesAtViewingNode = enemies
+    .filter(e => e.currentNode === cameraNodeId)
+    .map(e => ({ id: e.id, name: e.type, type: e.type }));
+
+  const playersAtViewingNode = allPlayers
+    .filter(p => p.currentNode === cameraNodeId)
     .map(p => ({
       id: p.id,
       name: (p as any).name || 'Игрок',
       isCurrentPlayer: p.id === playerId
     }));
 
-  // Конвертируем данные для совместимости с компонентами
+  // Для панели действий используем ТЕКУЩУЮ ноду
+  const enemiesAtCurrentNode = enemies
+    .filter(e => e.currentNode === player?.currentNode)
+    .map(e => e.type);
+
+  // Конвертируем данные для совместимости
   const animatronicsForPanel: AnimatronicState[] = enemies.map(e => ({
     id: e.id,
     type: e.type,
@@ -249,44 +230,45 @@ export default function GameBoard() {
     currentNode: p.currentNode,
     status: p.status,
     stats: { ...DEFAULT_STATS, hp: p.stats.hp, stamina: p.stats.stamina || DEFAULT_STATS.stamina },
-    equipment: DEFAULT_EQUIPMENT,
+    equipment: equipment,
     inventory: p.inventory,
     roubles: 0,
     turnActions: 4,
     gameLog: []
   }));
 
+  // ★ Обработчик переключения камеры (при клике на любую ноду на карте)
+  const handleCameraSwitch = useCallback((node: MapNodeData) => {
+    setViewingNode(node);
+    addLogEntry(`Камера переключена на: ${node.nameRu}`, 'system');
+  }, [addLogEntry]);
+
   // Обработчик выбора узла на карте
   const handleNodeSelect = useCallback((node: MapNodeData) => {
     setSelectedNode(node);
-    addLogEntry(`Просмотр: ${node.nameRu}`, 'system');
-  }, [addLogEntry]);
+  }, []);
 
-  // Обработчик запроса перемещения (из GameMap)
+  // Обработчик запроса перемещения
   const handleMoveRequest = useCallback(async (targetNode: MapNodeData, staminaCost: number) => {
     if (!playerId || !player) return;
 
-    // Проверка выносливости
     if (currentStamina < staminaCost) {
       addLogEntry('Недостаточно выносливости для перемещения!', 'system');
       return;
     }
 
-    // Проверяем, есть ли враг в целевой локации
     const enemyAtTarget = enemies.find(e => e.currentNode === targetNode.id);
 
     if (enemyAtTarget) {
-      // Запускаем систему встречи с аниматроником
       setEncounter({
         active: true,
         enemyName: enemyAtTarget.type,
         enemyType: enemyAtTarget.type,
         pendingMove: targetNode,
         staminaCost,
-        previousNode: player.currentNode // Сохраняем текущую позицию для отступления
+        previousNode: player.currentNode
       });
     } else {
-      // Просто перемещаемся
       await executeMove(targetNode.id, staminaCost);
     }
   }, [playerId, player, currentStamina, enemies, addLogEntry]);
@@ -296,15 +278,16 @@ export default function GameBoard() {
     if (!playerId) return;
 
     try {
-      // Тратим выносливость
       await updateStamina(GAME_ID, playerId, -staminaCost);
-
-      // Перемещаемся
       const res = await movePlayer(GAME_ID, playerId, targetNodeId);
 
       if (res.success) {
         const targetNode = getNodeById(targetNodeId);
         addLogEntry(`Перемещение в ${targetNode?.nameRu || targetNodeId}`, 'move');
+        // ★ Автоматически переключаем камеру на новую позицию
+        if (targetNode) {
+          setViewingNode(null); // Сбрасываем на текущую позицию
+        }
       } else {
         addLogEntry(res.message || 'Ошибка перемещения', 'system');
       }
@@ -314,32 +297,25 @@ export default function GameBoard() {
     }
   }, [playerId, addLogEntry]);
 
-  // Обработка результата встречи с аниматроником
+  // Обработка результата встречи
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
     if (!encounter || !playerId) return;
 
     if (result.evaded) {
-      // Уклонились - перемещаемся без урона
       addLogEntry(`Уклонение от ${result.animatronicName}! (бросок: ${result.diceRoll})`, 'combat');
-
       if (encounter.pendingMove) {
         await executeMove(encounter.pendingMove.id, encounter.staminaCost);
       }
     } else {
-      // Получили урон
       const actionText = result.action === 'retreat' ? 'отступил с' :
                         result.action === 'respin' ? 'перекрутил и получил' : 'получил';
       addLogEntry(`${result.animatronicName} атакует! Игрок ${actionText} ${result.damageReceived} урона!`, 'combat');
 
-      // Применяем урон
       await applyDamage(GAME_ID, playerId, result.damageReceived);
 
-      // Если отступление - остаёмся на текущей клетке (не перемещаемся)
       if (result.retreated) {
         addLogEntry(`Отступление на предыдущую позицию`, 'move');
-        // Не выполняем перемещение - игрок остаётся где был
       } else {
-        // Перемещаемся (получив урон)
         if (encounter.pendingMove) {
           await executeMove(encounter.pendingMove.id, encounter.staminaCost);
         }
@@ -349,18 +325,18 @@ export default function GameBoard() {
     setEncounter(null);
   }, [encounter, playerId, executeMove, addLogEntry]);
 
-  // Обнуление выносливости при выпадении колеса
   const handleStaminaReset = useCallback(async () => {
     if (!playerId) return;
-    await updateStamina(GAME_ID, playerId, -currentStamina); // Обнуляем
+    await updateStamina(GAME_ID, playerId, -currentStamina);
     addLogEntry('Выносливость обнулена!', 'system');
   }, [playerId, currentStamina, addLogEntry]);
 
-  // Обработчик лутинга
+  // ★ Обработчик лутинга с добавлением в инвентарь
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
 
     setIsLooting(true);
+    setFoundItem(null);
     addLogEntry('Обыскиваю локацию...', 'loot');
 
     try {
@@ -368,7 +344,51 @@ export default function GameBoard() {
 
       if (result.success) {
         if (result.items && result.items.length > 0) {
-          addLogEntry(`Найдено: ${result.items.join(', ')}`, 'loot');
+          const itemId = result.items[0];
+          const item = getItemById(itemId);
+
+          if (item) {
+            // Показываем найденный предмет
+            setFoundItem({ icon: item.icon, name: item.nameRu });
+
+            // ★ Добавляем в инвентарь (в первый свободный слот рюкзака)
+            setEquipment(prev => {
+              const newEquipment = JSON.parse(JSON.stringify(prev)) as Equipment;
+
+              // Пробуем добавить в рюкзак
+              if (newEquipment.backpack) {
+                const emptySlot = newEquipment.backpack.items.findIndex(s => s === null);
+                if (emptySlot !== -1) {
+                  newEquipment.backpack.items[emptySlot] = itemId;
+                  return newEquipment;
+                }
+              }
+
+              // Пробуем добавить в разгрузку
+              if (newEquipment.rig) {
+                const emptySlot = newEquipment.rig.items.findIndex(s => s === null);
+                if (emptySlot !== -1) {
+                  newEquipment.rig.items[emptySlot] = itemId;
+                  return newEquipment;
+                }
+              }
+
+              // Пробуем добавить в карманы
+              const pocketSlot = newEquipment.pockets.findIndex(s => s === null);
+              if (pocketSlot !== -1) {
+                newEquipment.pockets[pocketSlot] = itemId;
+                return newEquipment;
+              }
+
+              addLogEntry('Инвентарь полон!', 'system');
+              return prev;
+            });
+
+            addLogEntry(`Найдено: ${item.nameRu}`, 'loot');
+
+            // Скрываем анимацию через 2 секунды
+            setTimeout(() => setFoundItem(null), 2000);
+          }
         } else {
           addLogEntry('Ничего не найдено', 'loot');
         }
@@ -383,19 +403,20 @@ export default function GameBoard() {
     }
   }, [playerId, isLooting, addLogEntry]);
 
-  // Обработчик ожидания - пропуск хода (обнуляет выносливость)
+  // Обработчик ожидания
   const handleWait = useCallback(async () => {
     if (!playerId) return;
-
     addLogEntry('Вы пропускаете ход...', 'system');
-
-    // Обнуляем выносливость (пропуск хода)
     await updateStamina(GAME_ID, playerId, -currentStamina);
-
     addLogEntry('Выносливость израсходована. Ожидание нового хода...', 'system');
   }, [playerId, currentStamina, addLogEntry]);
 
-  // Экран выбора игрока (для новых игроков)
+  // ★ Обработчик изменения экипировки (из InventoryTab)
+  const handleEquipmentChange = useCallback((newEquipment: Equipment) => {
+    setEquipment(newEquipment);
+  }, []);
+
+  // Экран выбора игрока
   if (needsSlotSelection) {
     return (
       <PlayerSelection
@@ -421,12 +442,11 @@ export default function GameBoard() {
     );
   }
 
-  // Проверка есть ли враг в текущей локации
   const hasEnemyHere = enemiesAtCurrentNode.length > 0;
 
   return (
     <main className="h-screen bg-black text-white overflow-hidden flex flex-col">
-      {/* Система встречи с аниматроником (кубик + колесо) */}
+      {/* Система встречи с аниматроником */}
       {encounter?.active && (
         <EncounterSystem
           animatronicName={encounter.enemyName}
@@ -437,7 +457,7 @@ export default function GameBoard() {
         />
       )}
 
-      {/* Оверлей боя (QTE) */}
+      {/* Оверлей боя */}
       {isCombat && combatEnemy && !encounter?.active && (
         <CombatEncounter
           gameId={GAME_ID}
@@ -453,13 +473,14 @@ export default function GameBoard() {
         <div className="w-3/5 h-full border-r border-white/10 relative">
           <CameraView
             currentNode={currentNodeData || null}
-            nodeId={player.currentNode}
-            enemiesHere={enemiesAtCurrentNode}
-            playersHere={playersAtCurrentNode}
+            viewingNode={viewingNode}  // ★ Нода для просмотра
+            nodeId={cameraNodeId}
+            enemiesHere={enemiesAtViewingNode}
+            playersHere={playersAtViewingNode}
           />
 
-          {/* Панель действий поверх камеры */}
-          <div className="absolute bottom-4 left-4 w-64 z-20">
+          {/* Панель действий */}
+          <div className="absolute bottom-4 left-4 w-72 z-20">
             <ActionPanel
               currentNode={currentNodeData ?? null}
               currentStamina={currentStamina}
@@ -468,18 +489,20 @@ export default function GameBoard() {
               hasEnemyHere={hasEnemyHere}
               onLoot={handleLoot}
               onWait={handleWait}
+              foundItem={foundItem}  // ★ Найденный предмет
             />
           </div>
         </div>
 
         {/* ПРАВАЯ ЧАСТЬ - Панели (40% ширины) */}
         <div className="w-2/5 h-full flex flex-col">
-          {/* Верхняя панель - Вкладки (55% высоты) */}
+          {/* Верхняя панель - Вкладки */}
           <div className="h-[55%] border-b border-white/10">
             <TabbedPanel
               stats={{ ...DEFAULT_STATS, hp: player.stats.hp, stamina: currentStamina }}
               playerName={(player as any).name || playerId.slice(0, 8)}
-              equipment={DEFAULT_EQUIPMENT}
+              equipment={equipment}  // ★ Динамическая экипировка
+              onEquipmentChange={handleEquipmentChange}  // ★ Callback изменения
               selectedNode={selectedNode}
               animatronics={animatronicsForPanel}
               players={playersForPanel}
@@ -488,7 +511,7 @@ export default function GameBoard() {
             />
           </div>
 
-          {/* Нижняя панель - Карта (45% высоты) */}
+          {/* Нижняя панель - Карта */}
           <div className="h-[45%]">
             <GameMap
               gameId={GAME_ID}
@@ -498,6 +521,7 @@ export default function GameBoard() {
               enemies={enemies}
               selectedNode={selectedNode}
               onNodeSelect={handleNodeSelect}
+              onCameraSwitch={handleCameraSwitch}  // ★ Переключение камеры
               currentStamina={currentStamina}
               maxStamina={maxStamina}
               onMoveRequest={handleMoveRequest}
@@ -507,38 +531,52 @@ export default function GameBoard() {
       </div>
 
       {/* Нижняя панель статуса */}
-      <div className="h-10 bg-black border-t border-white/20 flex items-center justify-between px-4">
-        <div className="flex items-center gap-6 font-mono text-xs">
+      <div className="h-12 bg-gradient-to-r from-zinc-900 to-black border-t border-white/20 flex items-center justify-between px-6">
+        <div className="flex items-center gap-8 font-mono text-xs">
+          {/* HP */}
           <div className="flex items-center gap-2">
-            <span className="text-white/50">HP:</span>
-            <div className="w-24 h-2 bg-gray-800 overflow-hidden">
+            <span className="text-red-400">❤️</span>
+            <div className="w-28 h-2.5 bg-zinc-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-red-600 transition-all"
+                className="h-full bg-gradient-to-r from-red-600 to-red-500 transition-all rounded-full"
                 style={{ width: `${player.stats.hp}%` }}
               />
             </div>
-            <span className="text-red-400">{player.stats.hp}%</span>
+            <span className="text-red-400 font-bold">{player.stats.hp}%</span>
           </div>
+          {/* Sanity */}
           <div className="flex items-center gap-2">
-            <span className="text-white/50">SAN:</span>
-            <div className="w-24 h-2 bg-gray-800 overflow-hidden">
+            <span className="text-blue-400">🧠</span>
+            <div className="w-28 h-2.5 bg-zinc-800 rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-500 transition-all"
+                className="h-full bg-gradient-to-r from-blue-600 to-blue-500 transition-all rounded-full"
                 style={{ width: `${player.stats.san}%` }}
               />
             </div>
-            <span className="text-blue-400">{player.stats.san}%</span>
+            <span className="text-blue-400 font-bold">{player.stats.san}%</span>
           </div>
-          <div className="text-white/30">|</div>
+          <div className="text-white/20">│</div>
+          {/* Stamina */}
           <div className="flex items-center gap-2">
-            <span className="text-white/50">Выносливость:</span>
-            <span className="text-yellow-400">{currentStamina}/{maxStamina}</span>
+            <span className="text-yellow-400">⚡</span>
+            <div className="flex gap-0.5">
+              {Array(maxStamina).fill(0).map((_, i) => (
+                <div
+                  key={i}
+                  className={`w-3 h-3 rounded-sm ${i < currentStamina ? 'bg-yellow-400 shadow-sm shadow-yellow-400/50' : 'bg-zinc-700'}`}
+                />
+              ))}
+            </div>
+            <span className="text-yellow-400 font-bold">{currentStamina}/{maxStamina}</span>
           </div>
         </div>
-        <div className="flex items-center gap-4 font-mono text-xs">
-          <span className="text-white/30">Узел: {player.currentNode}</span>
-          <span className="text-white/30">|</span>
-          <span className="text-green-400">● ONLINE</span>
+        <div className="flex items-center gap-6 font-mono text-xs">
+          <span className="text-white/40">📍 {currentNodeData?.nameRu || player.currentNode}</span>
+          <span className="text-white/20">│</span>
+          <span className="flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
+            <span className="text-green-400">ONLINE</span>
+          </span>
         </div>
       </div>
     </main>

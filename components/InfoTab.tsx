@@ -3,67 +3,15 @@
  * FILE MANIFEST: components/InfoTab.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Вкладка информации - данные о выбранной ноде и игровой лог
+ * PURPOSE: Вкладка информации - данные о выбранной ноде и игровой лог (REDESIGNED v2.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
+ * │ FEATURES                                                                    │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ DEFAULT EXPORT:                                                             │
- * │   InfoTab             - React компонент вкладки информации                 │
- * │                                                                             │
- * │ PROPS (InfoTabProps):                                                       │
- * │   selectedNode        - MapNodeData | null - выбранная нода                │
- * │   animatronics        - AnimatronicState[] - все аниматроники              │
- * │   players             - PlayerState[] - все игроки                         │
- * │   gameLog             - GameLogEntry[] - лог событий                       │
- * │   currentPlayerId     - string - ID текущего игрока (для подсветки)        │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   @/lib/mapData  → MapNodeData, DANGER_COLORS, DANGER_NAMES, etc           │
- * │   @/lib/itemData → getItemById                                             │
- * │   @/lib/types    → GameLogEntry, AnimatronicState, PlayerState             │
- * │                                                                             │
- * │ IMPORTED BY:                                                                │
- * │   ./TabbedPanel.tsx → используется как содержимое вкладки "ИНФОРМАЦИЯ"     │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ UI STRUCTURE                                                                │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │   ┌─────────────────────────────────────┐                                  │
- * │   │ ИНФОРМАЦИЯ                          │                                  │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ ▌Локация                            │                                  │
- * │   │   СТОЛОВАЯ (2)                      │ ← название + ID ноды             │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ АНИМАТРОНИКИ:                       │                                  │
- * │   │   ⚠ Freddy (100 HP)                 │ ← красная подсветка              │
- * │   │   ⚠ Bonnie (80 HP)                  │                                  │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ ИГРОКИ:                             │                                  │
- * │   │   ● Player1                         │ ← синий/фиолетовый               │
- * │   │   ● Player2 (вы)                    │                                  │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ ВОЗМОЖНЫЙ ЛУТ:                      │                                  │
- * │   │   🍕 Кусок пиццы 40%                │ ← цвет по lootType               │
- * │   │   🥤 Газировка 35%                  │                                  │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ УРОВЕНЬ ОПАСНОСТИ:                  │                                  │
- * │   │   [Высокий (55%)]                   │ ← цветной бейдж                  │
- * │   ├─────────────────────────────────────┤                                  │
- * │   │ ЛОГ ИГРЫ:                           │                                  │
- * │   │ ┌─────────────────────────────────┐ │                                  │
- * │   │ │[12:30] Игрок переместился в X   │ │ ← последние 10 записей          │
- * │   │ │[12:29] Найден предмет...        │ │                                  │
- * │   │ └─────────────────────────────────┘ │                                  │
- * │   └─────────────────────────────────────┘                                  │
- * │                                                                             │
- * │ LOG TYPES (цветовая схема):                                                │
- * │   combat (красный), loot (жёлтый), move (синий), event (фиолетовый)        │
+ * │ - Стилизованные карточки секций                                            │
+ * │ - Анимированные индикаторы угроз                                           │
+ * │ - Цветовая кодировка по типам                                              │
+ * │ - Улучшенный лог с иконками                                                │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -82,6 +30,24 @@ interface InfoTabProps {
   gameLog: GameLogEntry[];
   currentPlayerId: string;
 }
+
+// Иконки для типов логов
+const LOG_ICONS: Record<string, string> = {
+  combat: '⚔️',
+  loot: '💎',
+  move: '🚶',
+  event: '📢',
+  system: '⚙️'
+};
+
+// Цвета аниматроников
+const ANIMATRONIC_COLORS: Record<string, string> = {
+  'foxy': 'text-red-400 bg-red-900/30 border-red-500/50',
+  'bonnie': 'text-blue-400 bg-blue-900/30 border-blue-500/50',
+  'chica': 'text-yellow-400 bg-yellow-900/30 border-yellow-500/50',
+  'freddy': 'text-amber-600 bg-amber-900/30 border-amber-600/50',
+  'default': 'text-red-400 bg-red-900/30 border-red-500/50'
+};
 
 export default function InfoTab({
   selectedNode,
@@ -104,73 +70,150 @@ export default function InfoTab({
     : [];
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Заголовок */}
-      <div className="border-b border-white/20 pb-2 mb-3">
-        <h3 className="text-white font-mono text-sm tracking-wider">ИНФОРМАЦИЯ</h3>
+      <div className="relative border-b border-white/20 pb-3 mb-3 flex-shrink-0">
+        <div className="absolute left-0 top-1/2 w-3 h-3 border border-cyan-500/50 rotate-45 -translate-y-1/2" />
+        <h3 className="text-white font-mono text-sm tracking-[0.3em] pl-6 uppercase">
+          Информация
+        </h3>
+        <div className="absolute right-0 top-0 h-full w-16 bg-gradient-to-l from-cyan-900/20 to-transparent" />
       </div>
 
       {selectedNode ? (
-        <div className="flex-1 overflow-y-auto space-y-3">
+        <div className="flex-1 overflow-y-auto custom-scrollbar space-y-3 pr-1">
           {/* Название локации */}
-          <div className="border-l-2 border-red-500 pl-2">
-            <div className="text-white/50 text-xs font-mono">Локация</div>
-            <div className="text-white font-mono text-sm">{room?.label || selectedNode.nameRu}</div>
-            <div className="text-white/40 text-xs font-mono">({selectedNode.id})</div>
+          <div className="p-3 bg-gradient-to-r from-zinc-900/80 to-transparent border-l-3 border-l-red-500 rounded-r-lg">
+            <div className="text-red-400/70 text-[10px] font-mono tracking-widest mb-1">
+              ▸ ЛОКАЦИЯ
+            </div>
+            <div className="text-white font-mono text-lg font-bold">
+              {room?.label || selectedNode.nameRu}
+            </div>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-white/30 font-mono text-xs bg-white/5 px-2 py-0.5 rounded">
+                ID: {selectedNode.id}
+              </span>
+              {/* Бейдж опасности */}
+              <span className={`text-xs font-mono px-2 py-0.5 rounded border ${dangerColor?.bg} ${dangerColor?.border} ${dangerColor?.text}`}>
+                {dangerName} {selectedNode.dangerPercent}%
+              </span>
+            </div>
           </div>
 
           {/* Аниматроники */}
-          <div>
-            <div className="text-white/70 text-xs font-mono mb-1">АНИМАТРОНИКИ:</div>
+          <div className="p-3 bg-zinc-900/50 rounded-lg border border-white/5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-red-500 animate-pulse">⚠</span>
+              <span className="text-white/70 text-xs font-mono uppercase tracking-wider">
+                Аниматроники
+              </span>
+              {animatronicsHere.length > 0 && (
+                <span className="ml-auto text-red-400 text-xs font-mono bg-red-900/30 px-2 rounded animate-pulse">
+                  {animatronicsHere.length} УГРОЗ
+                </span>
+              )}
+            </div>
             {animatronicsHere.length > 0 ? (
-              <div className="space-y-1 pl-2">
-                {animatronicsHere.map(a => (
-                  <div key={a.id} className="flex items-center gap-2 text-xs">
-                    <span className="text-red-400">⚠</span>
-                    <span className="text-red-400 font-mono">{a.name}</span>
-                    <span className="text-white/40">({a.hp} HP)</span>
-                  </div>
-                ))}
+              <div className="space-y-1.5">
+                {animatronicsHere.map(a => {
+                  const colorClass = ANIMATRONIC_COLORS[a.type?.toLowerCase()] || ANIMATRONIC_COLORS.default;
+                  return (
+                    <div
+                      key={a.id}
+                      className={`flex items-center gap-3 p-2 rounded border ${colorClass}`}
+                    >
+                      <span className="text-xl animate-pulse">👾</span>
+                      <div className="flex-1">
+                        <div className="font-mono text-sm font-bold">{a.name}</div>
+                        <div className="text-[10px] opacity-60">{a.type}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-mono text-xs">
+                          ❤️ {a.hp}/{a.maxHp}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-white/30 text-xs pl-2 italic">Нет</div>
+              <div className="text-green-400/50 text-xs font-mono pl-2 flex items-center gap-2">
+                <span>✓</span>
+                <span>Чисто</span>
+              </div>
             )}
           </div>
 
           {/* Игроки */}
-          <div>
-            <div className="text-white/70 text-xs font-mono mb-1">ИГРОКИ:</div>
+          <div className="p-3 bg-zinc-900/50 rounded-lg border border-white/5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-blue-400">👥</span>
+              <span className="text-white/70 text-xs font-mono uppercase tracking-wider">
+                Игроки
+              </span>
+              <span className="ml-auto text-white/30 text-xs font-mono">
+                {playersHere.length}
+              </span>
+            </div>
             {playersHere.length > 0 ? (
-              <div className="space-y-1 pl-2">
-                {playersHere.map(p => (
-                  <div key={p.id} className="flex items-center gap-2 text-xs">
-                    <span className={p.id === currentPlayerId ? 'text-purple-400' : 'text-blue-400'}>●</span>
-                    <span className={`font-mono ${p.id === currentPlayerId ? 'text-purple-400' : 'text-blue-400'}`}>
-                      {p.name || 'Игрок'}
-                    </span>
-                    {p.id === currentPlayerId && <span className="text-white/30">(вы)</span>}
-                  </div>
-                ))}
+              <div className="space-y-1">
+                {playersHere.map(p => {
+                  const isYou = p.id === currentPlayerId;
+                  return (
+                    <div
+                      key={p.id}
+                      className={`flex items-center gap-2 p-2 rounded text-sm ${
+                        isYou
+                          ? 'bg-purple-900/30 border border-purple-500/30'
+                          : 'bg-zinc-800/50'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isYou ? 'bg-purple-500' : 'bg-blue-500'}`} />
+                      <span className={`font-mono ${isYou ? 'text-purple-300' : 'text-blue-300'}`}>
+                        {p.name || 'Игрок'}
+                      </span>
+                      {isYou && (
+                        <span className="ml-auto text-[10px] text-purple-400/60 font-mono">(ВЫ)</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
-              <div className="text-white/30 text-xs pl-2 italic">Нет</div>
+              <div className="text-white/30 text-xs font-mono pl-2 italic">
+                Пусто
+              </div>
             )}
           </div>
 
           {/* Возможный лут */}
-          <div>
-            <div className="text-white/70 text-xs font-mono mb-1">ВОЗМОЖНЫЙ ЛУТ:</div>
+          <div className="p-3 bg-zinc-900/50 rounded-lg border border-white/5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-yellow-400">💎</span>
+              <span className="text-white/70 text-xs font-mono uppercase tracking-wider">
+                Возможный лут
+              </span>
+              <span className="ml-auto text-white/30 text-xs font-mono">
+                {selectedNode.possibleLoot.length} предметов
+              </span>
+            </div>
             {selectedNode.possibleLoot.length > 0 ? (
-              <div className="space-y-0.5 pl-2">
+              <div className="grid grid-cols-2 gap-1">
                 {selectedNode.possibleLoot.map((loot, idx) => {
                   const item = getItemById(loot.itemId);
                   return (
-                    <div key={idx} className="flex items-center gap-2 text-xs">
-                      <span>{item?.icon || '📦'}</span>
-                      <span className={`font-mono ${lootTypeColor}`}>
-                        {item?.nameRu || loot.itemId}
-                      </span>
-                      <span className="text-white/30">
+                    <div
+                      key={idx}
+                      className="flex items-center gap-2 p-1.5 bg-zinc-800/50 rounded text-xs"
+                    >
+                      <span className="text-base">{item?.icon || '📦'}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className={`font-mono truncate ${lootTypeColor}`}>
+                          {item?.nameRu || loot.itemId}
+                        </div>
+                      </div>
+                      <span className="text-white/40 font-mono text-[10px]">
                         {loot.chance}%
                       </span>
                     </div>
@@ -178,35 +221,48 @@ export default function InfoTab({
                 })}
               </div>
             ) : (
-              <div className="text-white/30 text-xs pl-2 italic">Нет лута</div>
+              <div className="text-white/30 text-xs font-mono pl-2 italic">
+                Нет лута
+              </div>
             )}
-          </div>
-
-          {/* Уровень опасности */}
-          <div>
-            <div className="text-white/70 text-xs font-mono mb-1">УРОВЕНЬ ОПАСНОСТИ:</div>
-            <div className={`inline-block px-2 py-1 ${dangerColor?.bg} border ${dangerColor?.border} ${dangerColor?.text} text-xs font-mono`}>
-              {dangerName} ({selectedNode.dangerPercent}%)
-            </div>
           </div>
         </div>
       ) : (
-        <div className="text-white/30 text-xs italic mb-4">
-          Выберите точку на карте для просмотра информации
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center text-white/30 font-mono text-xs p-6">
+            <div className="text-4xl mb-3 opacity-30">🗺️</div>
+            <div className="text-white/40">Выберите точку на карте</div>
+            <div className="text-[10px] mt-1 text-white/20">
+              для просмотра информации
+            </div>
+          </div>
         </div>
       )}
 
       {/* Лог игры */}
-      <div className="mt-auto pt-3 border-t border-white/20">
-        <div className="text-white/70 text-xs font-mono mb-2">ЛОГ ИГРЫ:</div>
-        <div className="h-24 overflow-y-auto bg-black/30 border border-white/10 p-2 space-y-1">
+      <div className="mt-auto pt-3 border-t border-white/20 flex-shrink-0">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-green-400">📜</span>
+          <span className="text-white/70 text-xs font-mono uppercase tracking-wider">
+            Лог игры
+          </span>
+        </div>
+        <div className="h-28 overflow-y-auto bg-black/50 border border-white/10 rounded-lg p-2 space-y-1 custom-scrollbar">
           {gameLog.length > 0 ? (
             gameLog.slice(-10).reverse().map((entry, idx) => (
-              <div key={idx} className="text-xs font-mono">
-                <span className="text-white/30">
-                  [{new Date(entry.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}]
+              <div
+                key={idx}
+                className={`flex items-start gap-2 text-xs font-mono p-1.5 rounded ${
+                  entry.type === 'combat' ? 'bg-red-900/20' :
+                  entry.type === 'loot' ? 'bg-yellow-900/20' :
+                  ''
+                }`}
+              >
+                <span className="flex-shrink-0">{LOG_ICONS[entry.type] || '📌'}</span>
+                <span className="text-white/30 flex-shrink-0">
+                  {new Date(entry.timestamp).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <span className={`ml-1 ${
+                <span className={`flex-1 ${
                   entry.type === 'combat' ? 'text-red-400' :
                   entry.type === 'loot' ? 'text-yellow-400' :
                   entry.type === 'move' ? 'text-blue-400' :
@@ -218,7 +274,9 @@ export default function InfoTab({
               </div>
             ))
           ) : (
-            <div className="text-white/30 text-xs italic">Начните игру...</div>
+            <div className="h-full flex items-center justify-center text-white/20 text-xs font-mono">
+              Ожидание событий...
+            </div>
           )}
         </div>
       </div>
