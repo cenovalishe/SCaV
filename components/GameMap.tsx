@@ -68,9 +68,10 @@
 
 'use client'
 
-import React from 'react';
+import React, { useState } from 'react';
 import { MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS, DANGER_COLORS, MapNodeData } from '@/lib/mapData';
 import { movePlayer } from '@/app/actions/gameActions';
+import MoveConfirmDialog from './MoveConfirmDialog';
 
 interface GameMapProps {
   currentNodeId: string;
@@ -80,7 +81,13 @@ interface GameMapProps {
   enemies: any[];
   selectedNode: MapNodeData | null;
   onNodeSelect: (node: MapNodeData) => void;
+  currentStamina: number;
+  maxStamina: number;
+  onMoveRequest?: (targetNode: MapNodeData, staminaCost: number) => void;
 }
+
+// Базовая стоимость перемещения
+const BASE_MOVE_COST = 1;
 
 export default function GameMap({
   currentNodeId,
@@ -89,26 +96,71 @@ export default function GameMap({
   allPlayers = [],
   enemies,
   selectedNode,
-  onNodeSelect
+  onNodeSelect,
+  currentStamina = 4,
+  maxStamina = 7,
+  onMoveRequest
 }: GameMapProps) {
+  const [pendingMove, setPendingMove] = useState<MapNodeData | null>(null);
+
   const currentNode = MAP_NODES_DATA.find(n => n.id === currentNodeId);
   const neighbors = currentNode?.neighbors || [];
 
-  const handleNodeClick = async (node: MapNodeData) => {
+  // Получить стоимость перемещения (можно сделать зависящей от опасности)
+  const getMoveCost = (node: MapNodeData): number => {
+    // Базовая стоимость + дополнительная за опасные зоны
+    const dangerCosts: Record<string, number> = {
+      'safe': 0,
+      'low': 0,
+      'medium': 0,
+      'high': 1,
+      'extreme': 1
+    };
+    return BASE_MOVE_COST + (dangerCosts[node.dangerLevel] || 0);
+  };
+
+  const handleNodeClick = (node: MapNodeData) => {
     // Всегда выбираем ноду для отображения информации
     onNodeSelect(node);
 
-    // Если это соседний узел - перемещаемся
+    // Если это соседний узел - показываем диалог подтверждения
     if (neighbors.includes(node.id)) {
-      try {
-        const res = await movePlayer(gameId, playerId, node.id);
-        if (res && !res.success) {
-          console.log(res.message);
-        }
-      } catch (error) {
-        console.error("Ошибка при перемещении:", error);
-      }
+      setPendingMove(node);
     }
+  };
+
+  const handleConfirmMove = async () => {
+    if (!pendingMove) return;
+
+    const staminaCost = getMoveCost(pendingMove);
+
+    // Если есть внешний обработчик - используем его (для учёта выносливости)
+    if (onMoveRequest) {
+      onMoveRequest(pendingMove, staminaCost);
+      setPendingMove(null);
+      return;
+    }
+
+    // Fallback - прямое перемещение
+    try {
+      const res = await movePlayer(gameId, playerId, pendingMove.id);
+      if (res && !res.success) {
+        console.log(res.message);
+      }
+    } catch (error) {
+      console.error("Ошибка при перемещении:", error);
+    }
+
+    setPendingMove(null);
+  };
+
+  const handleCancelMove = () => {
+    setPendingMove(null);
+  };
+
+  // Проверка врага в целевой точке
+  const getEnemyAtNode = (nodeId: string) => {
+    return enemies.find(e => e.currentNode === nodeId);
   };
 
   return (
@@ -330,6 +382,27 @@ export default function GameMap({
           </span>
         </div>
       </div>
+
+      {/* Выносливость */}
+      <div className="absolute bottom-2 right-2 z-10 bg-black/80 px-2 py-1 border border-white/10">
+        <div className="flex items-center gap-1 text-[10px] font-mono">
+          <span className="text-yellow-400">⚡</span>
+          <span className="text-white/70">{currentStamina}/{maxStamina}</span>
+        </div>
+      </div>
+
+      {/* Диалог подтверждения перемещения */}
+      {pendingMove && (
+        <MoveConfirmDialog
+          targetNode={pendingMove}
+          currentStamina={currentStamina}
+          staminaCost={getMoveCost(pendingMove)}
+          hasEnemyAtTarget={!!getEnemyAtNode(pendingMove.id)}
+          enemyName={getEnemyAtNode(pendingMove.id)?.type}
+          onConfirm={handleConfirmMove}
+          onCancel={handleCancelMove}
+        />
+      )}
     </div>
   );
 }
