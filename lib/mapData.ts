@@ -252,7 +252,7 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     id: "2",
     type: "POI_EVENT",
     pos: [45, 45],
-    neighbors: ["X", "G", "A"],  // From X, to G and A
+    neighbors: ["X", "A"],  // From X, to A
     roomId: 'R_MAIN',
     nameRu: 'Центр столовой',
     nameEn: 'Dining Center',
