@@ -65,8 +65,9 @@ export type PlayerState = {
   stats: { 
     hp: number; 
     san: number;
-    stamina: number;     // <--- Добавлено поле
-    maxStamina: number;  // <--- Добавлено поле
+    stamina: number;
+    maxStamina: number;
+    stealth: number; // <--- Добавляем определение типа
   };
   inventory: string[];
 };
