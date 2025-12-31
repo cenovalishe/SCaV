@@ -35,6 +35,7 @@ import CombatEncounter from '@/components/CombatEncounter';
 import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
 import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
+import LootRoulette from '@/components/LootRoulette';
 
 // Дефолтные значения
 const DEFAULT_STATS: CharacterStats = {
@@ -90,6 +91,9 @@ export default function GameBoard() {
 
   // ★ Найденный предмет (для анимации)
   const [foundItem, setFoundItem] = useState<{ icon: string; name: string } | null>(null);
+
+  // ★ Лут рулетка (контейнер с лутом)
+  const [lootRoulette, setLootRoulette] = useState<{ active: boolean; possibleItems: string[] } | null>(null);
 
   // Состояние встречи с аниматроником
   const [encounter, setEncounter] = useState<{
@@ -331,6 +335,17 @@ export default function GameBoard() {
     addLogEntry('Выносливость обнулена!', 'system');
   }, [playerId, currentStamina, addLogEntry]);
 
+  // ★ Возможные предметы для лут-рулетки
+  const LOOT_CONTAINER_ITEMS = [
+    'medkit', 'bandage', 'pills', 'food', 'soda', 'adrenaline',
+    'golden_cupcake', 'foxy_plush', 'treasure_map', 'security_badge',
+    'tablet', 'phone', 'old_tape', 'microphone', 'flashlight', 'batteries',
+    'hook', 'eyepatch', 'wrench', 'spare_parts', 'coin', 'cupcake'
+  ];
+
+  // ★ Шанс найти контейнер с лутом (25%)
+  const LOOT_CONTAINER_CHANCE = 0.25;
+
   // ★ Обработчик лутинга с добавлением в инвентарь
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
@@ -343,6 +358,17 @@ export default function GameBoard() {
       const result = await lootLocation(GAME_ID, playerId);
 
       if (result.success) {
+        // ★ Проверяем шанс на контейнер с лутом
+        if (Math.random() < LOOT_CONTAINER_CHANCE) {
+          addLogEntry('🎁 Найден контейнер с лутом!', 'loot');
+          setLootRoulette({
+            active: true,
+            possibleItems: LOOT_CONTAINER_ITEMS
+          });
+          setIsLooting(false);
+          return;
+        }
+
         if (result.items && result.items.length > 0) {
           const itemId = result.items[0];
           const item = getItemById(itemId);
@@ -402,6 +428,55 @@ export default function GameBoard() {
       setIsLooting(false);
     }
   }, [playerId, isLooting, addLogEntry]);
+
+  // ★ Обработчик завершения лут-рулетки
+  const handleLootRouletteComplete = useCallback((items: { id: string; nameRu: string }[]) => {
+    // Добавляем предметы в инвентарь
+    setEquipment(prev => {
+      const newEquipment = JSON.parse(JSON.stringify(prev)) as Equipment;
+
+      for (const item of items) {
+        let added = false;
+
+        // Пробуем добавить в рюкзак
+        if (!added && newEquipment.backpack) {
+          const emptySlot = newEquipment.backpack.items.findIndex(s => s === null);
+          if (emptySlot !== -1) {
+            newEquipment.backpack.items[emptySlot] = item.id;
+            added = true;
+          }
+        }
+
+        // Пробуем добавить в разгрузку
+        if (!added && newEquipment.rig) {
+          const emptySlot = newEquipment.rig.items.findIndex(s => s === null);
+          if (emptySlot !== -1) {
+            newEquipment.rig.items[emptySlot] = item.id;
+            added = true;
+          }
+        }
+
+        // Пробуем добавить в карманы
+        if (!added) {
+          const pocketSlot = newEquipment.pockets.findIndex(s => s === null);
+          if (pocketSlot !== -1) {
+            newEquipment.pockets[pocketSlot] = item.id;
+            added = true;
+          }
+        }
+
+        if (added) {
+          addLogEntry(`Получено: ${item.nameRu}`, 'loot');
+        } else {
+          addLogEntry(`Инвентарь полон! ${item.nameRu} потерян.`, 'system');
+        }
+      }
+
+      return newEquipment;
+    });
+
+    setLootRoulette(null);
+  }, [addLogEntry]);
 
   // Обработчик ожидания
   const handleWait = useCallback(async () => {
@@ -464,6 +539,15 @@ export default function GameBoard() {
           playerId={playerId}
           enemyId={combatEnemy.id}
           enemyHp={combatEnemy.hp}
+        />
+      )}
+
+      {/* ★ Лут рулетка */}
+      {lootRoulette?.active && (
+        <LootRoulette
+          possibleItems={lootRoulette.possibleItems}
+          onComplete={handleLootRouletteComplete}
+          onClose={() => setLootRoulette(null)}
         />
       )}
 
