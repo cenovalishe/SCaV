@@ -224,8 +224,8 @@ export default function GameMap({
           const isSelected = selectedNode?.id === node.id;
           const playersHere = allPlayers.filter(p => p.currentNode === node.id);
 
-          // ★ ТОЧКА 2 КРАСНАЯ
-          const isRedMarkedNode = node.id === '2';
+          // ★ ТОЧКИ 2 и 6 КРАСНЫЕ
+          const isRedMarkedNode = node.id === '2' || node.id === '6';
 
           // Цвет узла
           let nodeColor = '#3f3f46';

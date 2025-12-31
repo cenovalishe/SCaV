@@ -3,29 +3,16 @@
  * FILE MANIFEST: components/InventoryTab.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Вкладка инвентаря в стиле EFT с drag-and-drop (REDESIGNED v2.0)
+ * PURPOSE: Компактная вкладка инвентаря с переменными размерами слотов (REDESIGNED v3.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ FEATURES                                                                    │
+ * │ FEATURES v3.0                                                               │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ - Увеличенные слоты (12x12 вместо 7x7) и иконки                            │
- * │ - Прокрутка колёсиком с custom scrollbar                                   │
- * │ - Drag-and-drop перетаскивание предметов между слотами                     │
- * │ - ДИНАМИЧЕСКИЕ слоты контейнеров (появляются только с предметами)          │
- * │ - Интерактивные hover/drag эффекты                                         │
- * │ - Подсветка валидных целей при перетаскивании                              │
- * └─────────────────────────────────────────────────────────────────────────────┘
- *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ DEFAULT EXPORT:                                                             │
- * │   InventoryTab        - React компонент EFT-style инвентаря                │
- * │                                                                             │
- * │ PROPS (InventoryTabProps):                                                  │
- * │   equipment           - Equipment - вся экипировка и контейнеры            │
- * │   onEquipmentChange?  - (Equipment) => void - коллбэк изменения            │
- * │   onUseItem?          - (slotType, index?) => void - коллбэк использования │
+ * │ - Компактная компоновка без прокрутки                                       │
+ * │ - Переменные размеры слотов: 1x1, 2x1, 2x2                                 │
+ * │ - Popup с информацией о предмете при клике                                 │
+ * │ - Действия "использовать" и "выбросить"                                    │
+ * │ - Сгруппированные контейнеры                                               │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -33,17 +20,19 @@
 
 'use client'
 
-import { useState, useCallback, DragEvent } from 'react';
-import { Equipment, Container } from '@/lib/types';
+import { useState, useCallback, DragEvent, MouseEvent } from 'react';
+import { Equipment, Container, Item } from '@/lib/types';
 import { getItemById, calculateTotalValue, formatRoubles } from '@/lib/itemData';
+import ItemPopup from './ItemPopup';
 
 interface InventoryTabProps {
   equipment: Equipment;
   onEquipmentChange?: (newEquipment: Equipment) => void;
-  onUseItem?: (slotType: string, index?: number) => void;
+  onUseItem?: (itemId: string, slotType: string, index?: number) => void;
+  onDropItem?: (itemId: string, slotType: string, index?: number) => void;
+  currentStamina?: number;
 }
 
-// Тип для источника перетаскивания
 interface DragSource {
   type: 'equipment' | 'container' | 'pocket';
   slot?: string;
@@ -52,66 +41,182 @@ interface DragSource {
   itemId: string;
 }
 
-// Компонент слота экипировки (УВЕЛИЧЕННЫЙ)
-function EquipmentSlot({
+interface SlotConfig {
+  size: '1x1' | '2x1' | '2x2';
+  index: number;
+}
+
+// Конфигурация слотов рюкзака: два 2x2, один 2x1, три 1x1
+const BACKPACK_SLOTS: SlotConfig[] = [
+  { size: '2x2', index: 0 },
+  { size: '2x2', index: 1 },
+  { size: '2x1', index: 2 },
+  { size: '1x1', index: 3 },
+  { size: '1x1', index: 4 },
+  { size: '1x1', index: 5 },
+];
+
+// Конфигурация слотов разгрузки: четыре 1x1
+const RIG_SLOTS: SlotConfig[] = [
+  { size: '1x1', index: 0 },
+  { size: '1x1', index: 1 },
+  { size: '1x1', index: 2 },
+  { size: '1x1', index: 3 },
+];
+
+// Конфигурация слотов сумки: один 2x1, два 1x1
+const BAG_SLOTS: SlotConfig[] = [
+  { size: '2x1', index: 0 },
+  { size: '1x1', index: 1 },
+  { size: '1x1', index: 2 },
+];
+
+// Базовый размер единичного слота (увеличен)
+const SLOT_BASE_SIZE = 48; // px
+const SLOT_GAP = 4; // px
+
+// Компонент слота с переменным размером
+function VariableSlot({
+  size,
+  itemId,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onClick,
+  isDragOver,
+  color = 'zinc'
+}: {
+  size: '1x1' | '2x1' | '2x2';
+  itemId: string | null;
+  onDragStart?: (e: DragEvent) => void;
+  onDragOver?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent) => void;
+  onClick?: (e: MouseEvent) => void;
+  isDragOver?: boolean;
+  color?: 'zinc' | 'red' | 'blue' | 'orange';
+}) {
+  const item = itemId ? getItemById(itemId) : null;
+
+  // Размеры в зависимости от типа
+  const dimensions = {
+    '1x1': { w: SLOT_BASE_SIZE, h: SLOT_BASE_SIZE, icon: 'text-xl' },
+    '2x1': { w: SLOT_BASE_SIZE * 2 + SLOT_GAP, h: SLOT_BASE_SIZE, icon: 'text-2xl' },
+    '2x2': { w: SLOT_BASE_SIZE * 2 + SLOT_GAP, h: SLOT_BASE_SIZE * 2 + SLOT_GAP, icon: 'text-3xl' },
+  };
+
+  const colorSchemes = {
+    zinc: {
+      bg: 'from-zinc-800 to-zinc-900',
+      border: isDragOver ? 'border-green-400' : 'border-white/15',
+      hover: 'hover:border-white/30',
+    },
+    red: {
+      bg: 'from-red-900/40 to-red-950/40',
+      border: isDragOver ? 'border-green-400' : 'border-red-500/30',
+      hover: 'hover:border-red-400/50',
+    },
+    blue: {
+      bg: 'from-blue-900/40 to-blue-950/40',
+      border: isDragOver ? 'border-green-400' : 'border-blue-500/30',
+      hover: 'hover:border-blue-400/50',
+    },
+    orange: {
+      bg: 'from-orange-900/40 to-orange-950/40',
+      border: isDragOver ? 'border-green-400' : 'border-orange-500/30',
+      hover: 'hover:border-orange-400/50',
+    },
+  };
+
+  const scheme = colorSchemes[color];
+  const dim = dimensions[size];
+
+  return (
+    <div
+      draggable={!!item}
+      onDragStart={onDragStart}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onClick={onClick}
+      className={`
+        relative bg-gradient-to-br ${scheme.bg}
+        border ${scheme.border} ${scheme.hover}
+        rounded transition-all cursor-pointer
+        flex items-center justify-center
+        ${isDragOver ? 'scale-105 bg-green-900/30' : ''}
+        ${item ? 'hover:scale-[1.02] shadow-lg' : ''}
+      `}
+      style={{ width: dim.w, height: dim.h }}
+      title={item ? `${item.nameRu} - ${formatRoubles(item.value)}` : undefined}
+    >
+      {item ? (
+        <span className={`${dim.icon} drop-shadow-md`}>{item.icon}</span>
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className={`text-white/10 text-[8px] font-mono`}>{size}</div>
+        </div>
+      )}
+
+      {/* Индикатор размера для больших слотов */}
+      {size !== '1x1' && !item && (
+        <div className="absolute inset-0 border border-dashed border-white/5 rounded pointer-events-none" />
+      )}
+    </div>
+  );
+}
+
+// Компактный слот экипировки
+function CompactEquipmentSlot({
   label,
   slotType,
   itemId,
-  className = '',
   size = 'normal',
   onDragStart,
   onDragOver,
   onDrop,
+  onClick,
   isDragOver
 }: {
   label: string;
   slotType: string;
   itemId: string | null;
-  className?: string;
-  size?: 'small' | 'normal' | 'large';
-  onDragStart?: (e: DragEvent, itemId: string, slotType: string) => void;
+  size?: 'small' | 'normal';
+  onDragStart?: (e: DragEvent) => void;
   onDragOver?: (e: DragEvent) => void;
-  onDrop?: (e: DragEvent, slotType: string) => void;
+  onDrop?: (e: DragEvent) => void;
+  onClick?: (e: MouseEvent) => void;
   isDragOver?: boolean;
 }) {
   const item = itemId ? getItemById(itemId) : null;
 
-  const sizeClasses = {
-    small: 'w-11 h-11',
-    normal: 'w-14 h-14',
-    large: 'w-16 h-16'
+  const sizes = {
+    small: { dim: 'w-11 h-11', icon: 'text-xl', label: 'text-[8px]' },
+    normal: { dim: 'w-14 h-14', icon: 'text-2xl', label: 'text-[9px]' },
   };
 
-  const iconSizes = {
-    small: 'text-xl',
-    normal: 'text-2xl',
-    large: 'text-3xl'
-  };
+  const s = sizes[size];
 
   return (
     <div
       draggable={!!item}
-      onDragStart={(e) => item && onDragStart?.(e, itemId!, slotType)}
+      onDragStart={onDragStart}
       onDragOver={onDragOver}
-      onDrop={(e) => onDrop?.(e, slotType)}
+      onDrop={onDrop}
+      onClick={onClick}
       className={`
-        ${sizeClasses[size]}
-        border-2 ${isDragOver ? 'border-green-400 bg-green-900/40 scale-105' : 'border-white/20'}
-        bg-gradient-to-br from-zinc-900 to-zinc-800
+        ${s.dim}
+        border ${isDragOver ? 'border-green-400 bg-green-900/30' : 'border-white/15'}
+        bg-gradient-to-br from-zinc-800 to-zinc-900
         flex items-center justify-center
-        hover:border-white/40 hover:bg-zinc-700/50
-        active:scale-95
-        transition-all duration-150 cursor-pointer
-        rounded-lg shadow-lg shadow-black/30
-        ${item ? 'hover:scale-105 hover:shadow-xl' : ''}
-        ${className}
+        hover:border-white/30 hover:bg-zinc-700/50
+        transition-all cursor-pointer rounded
+        ${item ? 'hover:scale-105 shadow-md' : ''}
       `}
-      title={item ? `${item.nameRu}\n${formatRoubles(item.value)}` : label}
+      title={item ? `${item.nameRu}` : label}
     >
       {item ? (
-        <span className={`${iconSizes[size]} drop-shadow-lg`}>{item.icon}</span>
+        <span className={`${s.icon} drop-shadow-md`}>{item.icon}</span>
       ) : (
-        <span className="text-white/20 text-[9px] font-mono uppercase text-center leading-tight px-1">
+        <span className={`text-white/20 ${s.label} font-mono text-center leading-tight`}>
           {label}
         </span>
       )}
@@ -119,121 +224,18 @@ function EquipmentSlot({
   );
 }
 
-// Компонент контейнера (разгрузка, сумка, рюкзак) - ДИНАМИЧЕСКИЙ
-function ContainerSection({
-  container,
-  containerType,
-  label,
-  icon,
-  color,
-  maxSlots,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  dragOverIndex
-}: {
-  container: Container | null;
-  containerType: 'rig' | 'bag' | 'backpack';
-  label: string;
-  icon: string;
-  color: 'red' | 'blue' | 'orange';
-  maxSlots: number;
-  onDragStart?: (e: DragEvent, itemId: string, containerType: string, index: number) => void;
-  onDragOver?: (e: DragEvent, index: number) => void;
-  onDrop?: (e: DragEvent, containerType: string, index: number) => void;
-  dragOverIndex?: number;
-}) {
-  // ★ ДИНАМИКА: Если нет контейнера - НЕ отображаем секцию
-  if (!container) return null;
-
-  const slots = container.items || Array(maxSlots).fill(null);
-  const filledCount = slots.filter(s => s !== null).length;
-
-  const colorClasses = {
-    red: {
-      bg: 'from-red-950/70 to-red-900/40',
-      border: 'border-red-500/50',
-      header: 'bg-red-900/60 border-red-500/40',
-      slot: 'from-red-900/50 to-red-800/30 border-red-500/40',
-      slotHover: 'hover:border-red-400 hover:bg-red-800/40',
-      accent: 'text-red-400'
-    },
-    blue: {
-      bg: 'from-blue-950/70 to-blue-900/40',
-      border: 'border-blue-500/50',
-      header: 'bg-blue-900/60 border-blue-500/40',
-      slot: 'from-blue-900/50 to-blue-800/30 border-blue-500/40',
-      slotHover: 'hover:border-blue-400 hover:bg-blue-800/40',
-      accent: 'text-blue-400'
-    },
-    orange: {
-      bg: 'from-orange-950/70 to-orange-900/40',
-      border: 'border-orange-500/50',
-      header: 'bg-orange-900/60 border-orange-500/40',
-      slot: 'from-orange-900/50 to-orange-800/30 border-orange-500/40',
-      slotHover: 'hover:border-orange-400 hover:bg-orange-800/40',
-      accent: 'text-orange-400'
-    }
-  };
-
-  const c = colorClasses[color];
-
-  return (
-    <div className={`border-2 ${c.border} rounded-xl overflow-hidden bg-gradient-to-b ${c.bg} shadow-lg`}>
-      {/* Заголовок контейнера */}
-      <div className={`${c.header} px-3 py-2 border-b flex items-center gap-2`}>
-        <span className="text-xl">{icon}</span>
-        <span className="text-white/90 font-mono text-sm uppercase tracking-wider font-bold">{label}</span>
-        <span className={`${c.accent} font-mono text-xs ml-auto bg-black/30 px-2 py-0.5 rounded`}>
-          {filledCount}/{maxSlots}
-        </span>
-      </div>
-
-      {/* Слоты - УВЕЛИЧЕННЫЕ */}
-      <div className="p-3 flex flex-wrap gap-2 justify-center">
-        {slots.slice(0, maxSlots).map((itemId, idx) => {
-          const item = itemId ? getItemById(itemId) : null;
-          const isOver = dragOverIndex === idx;
-
-          return (
-            <div
-              key={idx}
-              draggable={!!item}
-              onDragStart={(e) => item && onDragStart?.(e, itemId!, containerType, idx)}
-              onDragOver={(e) => {
-                e.preventDefault();
-                onDragOver?.(e, idx);
-              }}
-              onDrop={(e) => {
-                e.preventDefault();
-                onDrop?.(e, containerType, idx);
-              }}
-              className={`
-                w-14 h-14 rounded-lg
-                bg-gradient-to-br ${c.slot}
-                border-2 ${isOver ? 'border-green-400 bg-green-900/40 scale-110' : c.border}
-                ${c.slotHover}
-                flex items-center justify-center
-                transition-all duration-150 cursor-pointer
-                hover:scale-105 shadow-inner
-                active:scale-95
-              `}
-              title={item ? `${item.nameRu} (${formatRoubles(item.value)})` : `Слот ${idx + 1}`}
-            >
-              {item && <span className="text-2xl drop-shadow-md">{item.icon}</span>}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }: InventoryTabProps) {
+export default function InventoryTab({
+  equipment,
+  onEquipmentChange,
+  onUseItem,
+  onDropItem,
+  currentStamina = 7
+}: InventoryTabProps) {
   const [dragSource, setDragSource] = useState<DragSource | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ type: string; index?: number } | null>(null);
+  const [selectedItem, setSelectedItem] = useState<{ item: Item; position: { x: number; y: number }; source: { type: string; index?: number } } | null>(null);
 
-  // Расчет общей ценности
+  // Расчет ценности
   const allItems: (string | null)[] = [
     ...(equipment.pockets || []),
     ...(equipment.rig?.items || []),
@@ -242,7 +244,7 @@ export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }
   ];
   const totalValue = calculateTotalValue(allItems);
 
-  // Обработчики drag-and-drop
+  // Drag handlers
   const handleDragStart = useCallback((e: DragEvent, itemId: string, source: string, index?: number) => {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', itemId);
@@ -269,7 +271,6 @@ export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }
 
   const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
     e.preventDefault();
-
     if (!dragSource || !onEquipmentChange) {
       handleDragEnd();
       return;
@@ -277,7 +278,7 @@ export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }
 
     const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
 
-    // Удаляем из источника
+    // Remove from source
     if (dragSource.type === 'container' && dragSource.containerType) {
       const container = newEquipment[dragSource.containerType];
       if (container && dragSource.index !== undefined) {
@@ -289,7 +290,7 @@ export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }
       (newEquipment as any)[dragSource.slot] = null;
     }
 
-    // Добавляем в цель
+    // Add to target
     if (['rig', 'bag', 'backpack'].includes(target)) {
       const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
       if (container && index !== undefined) {
@@ -306,220 +307,296 @@ export default function InventoryTab({ equipment, onEquipmentChange, onUseItem }
     handleDragEnd();
   }, [dragSource, equipment, onEquipmentChange, handleDragEnd]);
 
-  // Проверяем наличие контейнеров
+  // Item click handler
+  const handleItemClick = useCallback((e: MouseEvent, itemId: string, sourceType: string, index?: number) => {
+    const item = getItemById(itemId);
+    if (!item) return;
+
+    setSelectedItem({
+      item,
+      position: { x: e.clientX, y: e.clientY },
+      source: { type: sourceType, index }
+    });
+  }, []);
+
+  // Use item handler
+  const handleUseItem = useCallback((itemId: string) => {
+    if (!selectedItem || !onEquipmentChange) return;
+
+    // Remove item from inventory
+    const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+    const { type, index } = selectedItem.source;
+
+    if (['rig', 'bag', 'backpack'].includes(type)) {
+      const container = newEquipment[type as 'rig' | 'bag' | 'backpack'];
+      if (container && index !== undefined) {
+        container.items[index] = null;
+      }
+    } else if (type.startsWith('pocket')) {
+      const pocketIndex = parseInt(type.replace('pocket', ''));
+      newEquipment.pockets[pocketIndex] = null;
+    }
+
+    onEquipmentChange(newEquipment);
+    onUseItem?.(itemId, type, index);
+    setSelectedItem(null);
+  }, [selectedItem, equipment, onEquipmentChange, onUseItem]);
+
+  // Drop item handler
+  const handleDropItem = useCallback((itemId: string) => {
+    if (!selectedItem || !onEquipmentChange) return;
+
+    const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+    const { type, index } = selectedItem.source;
+
+    if (['rig', 'bag', 'backpack'].includes(type)) {
+      const container = newEquipment[type as 'rig' | 'bag' | 'backpack'];
+      if (container && index !== undefined) {
+        container.items[index] = null;
+      }
+    } else if (type.startsWith('pocket')) {
+      const pocketIndex = parseInt(type.replace('pocket', ''));
+      newEquipment.pockets[pocketIndex] = null;
+    }
+
+    onEquipmentChange(newEquipment);
+    onDropItem?.(itemId, type, index);
+    setSelectedItem(null);
+  }, [selectedItem, equipment, onEquipmentChange, onDropItem]);
+
   const hasRig = equipment.rig !== null;
   const hasBag = equipment.bag !== null;
   const hasBackpack = equipment.backpack !== null;
-  const hasAnyContainer = hasRig || hasBag || hasBackpack;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden" onDragEnd={handleDragEnd}>
+    <div className="h-full flex flex-col p-2" onDragEnd={handleDragEnd}>
       {/* Заголовок */}
-      <div className="relative border-b border-white/20 pb-3 mb-3 flex-shrink-0">
-        <div className="absolute left-0 top-1/2 w-3 h-3 border border-amber-500/50 rotate-45 -translate-y-1/2" />
-        <h3 className="text-white font-mono text-sm tracking-[0.3em] pl-6 uppercase">
-          Инвентарь
-        </h3>
-        <div className="absolute right-0 top-0 h-full w-16 bg-gradient-to-l from-amber-900/20 to-transparent" />
+      <div className="flex items-center gap-2 pb-2 mb-2 border-b border-white/10 flex-shrink-0">
+        <div className="w-1 h-4 bg-amber-500 rounded-full" />
+        <span className="text-white/80 font-mono text-xs uppercase tracking-[0.2em]">Инвентарь</span>
+        <div className="flex-1" />
+        <div className="flex items-center gap-1 text-amber-400 font-mono text-xs">
+          <span>💰</span>
+          <span>{formatRoubles(totalValue)}</span>
+        </div>
       </div>
 
-      {/* Основной контент с ПРОКРУТКОЙ */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
-        <div className="flex gap-4">
-          {/* ЛЕВАЯ ЧАСТЬ - Экипировка */}
-          <div className="flex flex-col items-center gap-2 flex-shrink-0">
-            {/* Спец слоты */}
-            <div className="flex gap-1.5">
-              {[0, 1, 2].map(i => (
-                <EquipmentSlot
-                  key={i}
-                  label={`СП${i + 1}`}
-                  slotType={`special${i}`}
-                  itemId={equipment.specials?.[i] || null}
-                  size="small"
-                  onDragStart={(e, itemId) => handleDragStart(e, itemId, `special${i}`)}
-                  onDragOver={(e) => handleDragOver(e, `special${i}`)}
-                  onDrop={(e) => handleDrop(e, `special${i}`)}
-                  isDragOver={dragOverTarget?.type === `special${i}`}
-                />
-              ))}
-            </div>
-
-            {/* Шлем, Броня, Одежда */}
-            <EquipmentSlot
-              label="ШЛЕМ"
-              slotType="helmet"
-              itemId={equipment.helmet}
-              size="large"
-              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'helmet')}
-              onDragOver={(e) => handleDragOver(e, 'helmet')}
-              onDrop={(e) => handleDrop(e, 'helmet')}
-              isDragOver={dragOverTarget?.type === 'helmet'}
-            />
-            <EquipmentSlot
-              label="БРОНЯ"
-              slotType="armor"
-              itemId={equipment.armor}
-              size="large"
-              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'armor')}
-              onDragOver={(e) => handleDragOver(e, 'armor')}
-              onDrop={(e) => handleDrop(e, 'armor')}
-              isDragOver={dragOverTarget?.type === 'armor'}
-            />
-            <EquipmentSlot
-              label="ОДЕЖДА"
-              slotType="clothes"
-              itemId={equipment.clothes}
-              size="large"
-              onDragStart={(e, itemId) => handleDragStart(e, itemId, 'clothes')}
-              onDragOver={(e) => handleDragOver(e, 'clothes')}
-              onDrop={(e) => handleDrop(e, 'clothes')}
-              isDragOver={dragOverTarget?.type === 'clothes'}
-            />
-
-            {/* Карманы */}
-            <div className="flex gap-1.5 mt-1">
-              {[0, 1, 2, 3].map(i => (
-                <EquipmentSlot
-                  key={i}
-                  label={`К${i + 1}`}
-                  slotType={`pocket${i}`}
-                  itemId={equipment.pockets?.[i] || null}
-                  size="small"
-                  onDragStart={(e, itemId) => handleDragStart(e, itemId, `pocket${i}`)}
-                  onDragOver={(e) => handleDragOver(e, `pocket${i}`)}
-                  onDrop={(e) => handleDrop(e, `pocket${i}`)}
-                  isDragOver={dragOverTarget?.type === `pocket${i}`}
-                />
-              ))}
-            </div>
-
-            {/* Оружие */}
-            <div className="w-full mt-2">
-              <EquipmentSlot
-                label="ОРУЖИЕ"
-                slotType="weapon"
-                itemId={equipment.weapon}
-                size="large"
-                className="w-full"
-                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'weapon')}
-                onDragOver={(e) => handleDragOver(e, 'weapon')}
-                onDrop={(e) => handleDrop(e, 'weapon')}
-                isDragOver={dragOverTarget?.type === 'weapon'}
-              />
-            </div>
-
-            {/* Обвесы оружия */}
-            <div className="flex gap-1.5">
-              <EquipmentSlot
-                label="ПРИЦ"
-                slotType="scope"
-                itemId={equipment.scope}
+      {/* Основной контент - БЕЗ ПРОКРУТКИ */}
+      <div className="flex gap-3 flex-1 min-h-0">
+        {/* ЛЕВАЯ КОЛОНКА - Экипировка (компактно) */}
+        <div className="flex flex-col gap-1 flex-shrink-0">
+          {/* Спец слоты */}
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <CompactEquipmentSlot
+                key={i}
+                label={`С${i + 1}`}
+                slotType={`special${i}`}
+                itemId={equipment.specials?.[i] || null}
                 size="small"
-                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'scope')}
-                onDragOver={(e) => handleDragOver(e, 'scope')}
-                onDrop={(e) => handleDrop(e, 'scope')}
-                isDragOver={dragOverTarget?.type === 'scope'}
+                onDragStart={(e) => equipment.specials?.[i] && handleDragStart(e, equipment.specials[i]!, `special${i}`)}
+                onDragOver={(e) => handleDragOver(e, `special${i}`)}
+                onDrop={(e) => handleDrop(e, `special${i}`)}
+                onClick={(e) => equipment.specials?.[i] && handleItemClick(e, equipment.specials[i]!, `special${i}`)}
+                isDragOver={dragOverTarget?.type === `special${i}`}
               />
-              <EquipmentSlot
-                label="ЛЦУ"
-                slotType="tactical"
-                itemId={equipment.tactical}
-                size="small"
-                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'tactical')}
-                onDragOver={(e) => handleDragOver(e, 'tactical')}
-                onDrop={(e) => handleDrop(e, 'tactical')}
-                isDragOver={dragOverTarget?.type === 'tactical'}
-              />
-              <EquipmentSlot
-                label="ГЛУШ"
-                slotType="suppressor"
-                itemId={equipment.suppressor}
-                size="small"
-                onDragStart={(e, itemId) => handleDragStart(e, itemId, 'suppressor')}
-                onDragOver={(e) => handleDragOver(e, 'suppressor')}
-                onDrop={(e) => handleDrop(e, 'suppressor')}
-                isDragOver={dragOverTarget?.type === 'suppressor'}
-              />
-            </div>
+            ))}
           </div>
 
-          {/* ПРАВАЯ ЧАСТЬ - Контейнеры (ДИНАМИЧЕСКИЕ) */}
-          <div className="flex-1 flex flex-col gap-3 min-w-0">
-            {/* Разгрузка - появляется только если есть */}
-            <ContainerSection
-              container={equipment.rig}
-              containerType="rig"
-              label="Разгрузка"
-              icon="🎽"
-              color="red"
-              maxSlots={4}
-              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
-              onDragOver={(e, idx) => handleDragOver(e, 'rig', idx)}
-              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
-              dragOverIndex={dragOverTarget?.type === 'rig' ? dragOverTarget.index : undefined}
-            />
+          {/* Шлем */}
+          <CompactEquipmentSlot
+            label="ШЛЕМ"
+            slotType="helmet"
+            itemId={equipment.helmet}
+            onDragStart={(e) => equipment.helmet && handleDragStart(e, equipment.helmet, 'helmet')}
+            onDragOver={(e) => handleDragOver(e, 'helmet')}
+            onDrop={(e) => handleDrop(e, 'helmet')}
+            onClick={(e) => equipment.helmet && handleItemClick(e, equipment.helmet, 'helmet')}
+            isDragOver={dragOverTarget?.type === 'helmet'}
+          />
 
-            {/* Сумка - появляется только если есть */}
-            <ContainerSection
-              container={equipment.bag}
-              containerType="bag"
-              label="Сумка"
-              icon="👜"
-              color="blue"
-              maxSlots={3}
-              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
-              onDragOver={(e, idx) => handleDragOver(e, 'bag', idx)}
-              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
-              dragOverIndex={dragOverTarget?.type === 'bag' ? dragOverTarget.index : undefined}
-            />
+          {/* Броня */}
+          <CompactEquipmentSlot
+            label="БРОНЯ"
+            slotType="armor"
+            itemId={equipment.armor}
+            onDragStart={(e) => equipment.armor && handleDragStart(e, equipment.armor, 'armor')}
+            onDragOver={(e) => handleDragOver(e, 'armor')}
+            onDrop={(e) => handleDrop(e, 'armor')}
+            onClick={(e) => equipment.armor && handleItemClick(e, equipment.armor, 'armor')}
+            isDragOver={dragOverTarget?.type === 'armor'}
+          />
 
-            {/* Рюкзак - появляется только если есть */}
-            <ContainerSection
-              container={equipment.backpack}
-              containerType="backpack"
-              label="Рюкзак"
-              icon="🎒"
-              color="orange"
-              maxSlots={8}
-              onDragStart={(e, itemId, type, idx) => handleDragStart(e, itemId, type, idx)}
-              onDragOver={(e, idx) => handleDragOver(e, 'backpack', idx)}
-              onDrop={(e, type, idx) => handleDrop(e, type, idx)}
-              dragOverIndex={dragOverTarget?.type === 'backpack' ? dragOverTarget.index : undefined}
-            />
+          {/* Одежда */}
+          <CompactEquipmentSlot
+            label="ОДЕЖ"
+            slotType="clothes"
+            itemId={equipment.clothes}
+            onDragStart={(e) => equipment.clothes && handleDragStart(e, equipment.clothes, 'clothes')}
+            onDragOver={(e) => handleDragOver(e, 'clothes')}
+            onDrop={(e) => handleDrop(e, 'clothes')}
+            onClick={(e) => equipment.clothes && handleItemClick(e, equipment.clothes, 'clothes')}
+            isDragOver={dragOverTarget?.type === 'clothes'}
+          />
 
-            {/* Если НЕТ контейнеров - подсказка */}
-            {!hasAnyContainer && (
-              <div className="flex-1 flex items-center justify-center min-h-[120px]">
-                <div className="text-center text-white/30 font-mono text-xs p-4 border-2 border-dashed border-white/10 rounded-xl">
-                  <div className="text-3xl mb-2 opacity-50">📦</div>
-                  <div className="text-white/40 font-bold">Нет контейнеров</div>
-                  <div className="text-[10px] mt-1 text-white/25">
-                    Найдите разгрузку, сумку или рюкзак
-                  </div>
-                </div>
+          {/* Карманы */}
+          <div className="flex gap-1 flex-wrap w-[96px]">
+            {[0, 1, 2, 3].map(i => (
+              <CompactEquipmentSlot
+                key={i}
+                label={`К${i + 1}`}
+                slotType={`pocket${i}`}
+                itemId={equipment.pockets?.[i] || null}
+                size="small"
+                onDragStart={(e) => equipment.pockets?.[i] && handleDragStart(e, equipment.pockets[i]!, `pocket${i}`)}
+                onDragOver={(e) => handleDragOver(e, `pocket${i}`)}
+                onDrop={(e) => handleDrop(e, `pocket${i}`)}
+                onClick={(e) => equipment.pockets?.[i] && handleItemClick(e, equipment.pockets[i]!, `pocket${i}`)}
+                isDragOver={dragOverTarget?.type === `pocket${i}`}
+              />
+            ))}
+          </div>
+
+          {/* Оружие и обвесы */}
+          <div className="mt-1 space-y-1">
+            <CompactEquipmentSlot
+              label="ОРУЖИЕ"
+              slotType="weapon"
+              itemId={equipment.weapon}
+              onDragStart={(e) => equipment.weapon && handleDragStart(e, equipment.weapon, 'weapon')}
+              onDragOver={(e) => handleDragOver(e, 'weapon')}
+              onDrop={(e) => handleDrop(e, 'weapon')}
+              onClick={(e) => equipment.weapon && handleItemClick(e, equipment.weapon, 'weapon')}
+              isDragOver={dragOverTarget?.type === 'weapon'}
+            />
+            <div className="flex gap-1">
+              {['scope', 'tactical', 'suppressor'].map((slot, i) => (
+                <CompactEquipmentSlot
+                  key={slot}
+                  label={['ПРЦ', 'ЛЦУ', 'ГЛШ'][i]}
+                  slotType={slot}
+                  itemId={(equipment as any)[slot]}
+                  size="small"
+                  onDragStart={(e) => (equipment as any)[slot] && handleDragStart(e, (equipment as any)[slot], slot)}
+                  onDragOver={(e) => handleDragOver(e, slot)}
+                  onDrop={(e) => handleDrop(e, slot)}
+                  onClick={(e) => (equipment as any)[slot] && handleItemClick(e, (equipment as any)[slot], slot)}
+                  isDragOver={dragOverTarget?.type === slot}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* ПРАВАЯ ЧАСТЬ - Контейнеры (компактно сгруппированы) */}
+        <div className="flex-1 flex flex-col gap-2 min-w-0">
+          {/* Разгрузка */}
+          {hasRig && (
+            <div className="p-2 bg-gradient-to-r from-red-950/50 to-red-900/30 border border-red-500/30 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">🎽</span>
+                <span className="text-red-400 font-mono text-[10px] uppercase tracking-wider">Разгрузка</span>
+                <span className="text-red-400/50 font-mono text-[10px] ml-auto">
+                  {equipment.rig?.items.filter(i => i !== null).length || 0}/{RIG_SLOTS.length}
+                </span>
               </div>
-            )}
-          </div>
+              <div className="flex gap-1 flex-wrap">
+                {RIG_SLOTS.map((slot) => (
+                  <VariableSlot
+                    key={slot.index}
+                    size={slot.size}
+                    itemId={equipment.rig?.items[slot.index] || null}
+                    color="red"
+                    onDragStart={(e) => equipment.rig?.items[slot.index] && handleDragStart(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
+                    onDragOver={(e) => handleDragOver(e, 'rig', slot.index)}
+                    onDrop={(e) => handleDrop(e, 'rig', slot.index)}
+                    onClick={(e) => equipment.rig?.items[slot.index] && handleItemClick(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
+                    isDragOver={dragOverTarget?.type === 'rig' && dragOverTarget?.index === slot.index}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Сумка */}
+          {hasBag && (
+            <div className="p-2 bg-gradient-to-r from-blue-950/50 to-blue-900/30 border border-blue-500/30 rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">👜</span>
+                <span className="text-blue-400 font-mono text-[10px] uppercase tracking-wider">Сумка</span>
+                <span className="text-blue-400/50 font-mono text-[10px] ml-auto">
+                  {equipment.bag?.items.filter(i => i !== null).length || 0}/{BAG_SLOTS.length}
+                </span>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {BAG_SLOTS.map((slot) => (
+                  <VariableSlot
+                    key={slot.index}
+                    size={slot.size}
+                    itemId={equipment.bag?.items[slot.index] || null}
+                    color="blue"
+                    onDragStart={(e) => equipment.bag?.items[slot.index] && handleDragStart(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
+                    onDragOver={(e) => handleDragOver(e, 'bag', slot.index)}
+                    onDrop={(e) => handleDrop(e, 'bag', slot.index)}
+                    onClick={(e) => equipment.bag?.items[slot.index] && handleItemClick(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
+                    isDragOver={dragOverTarget?.type === 'bag' && dragOverTarget?.index === slot.index}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Рюкзак */}
+          {hasBackpack && (
+            <div className="p-2 bg-gradient-to-r from-orange-950/50 to-orange-900/30 border border-orange-500/30 rounded-lg flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-sm">🎒</span>
+                <span className="text-orange-400 font-mono text-[10px] uppercase tracking-wider">Рюкзак</span>
+                <span className="text-orange-400/50 font-mono text-[10px] ml-auto">
+                  {equipment.backpack?.items.filter(i => i !== null).length || 0}/{BACKPACK_SLOTS.length}
+                </span>
+              </div>
+              <div className="flex gap-1 flex-wrap">
+                {BACKPACK_SLOTS.map((slot) => (
+                  <VariableSlot
+                    key={slot.index}
+                    size={slot.size}
+                    itemId={equipment.backpack?.items[slot.index] || null}
+                    color="orange"
+                    onDragStart={(e) => equipment.backpack?.items[slot.index] && handleDragStart(e, equipment.backpack.items[slot.index]!, 'backpack', slot.index)}
+                    onDragOver={(e) => handleDragOver(e, 'backpack', slot.index)}
+                    onDrop={(e) => handleDrop(e, 'backpack', slot.index)}
+                    onClick={(e) => equipment.backpack?.items[slot.index] && handleItemClick(e, equipment.backpack.items[slot.index]!, 'backpack', slot.index)}
+                    isDragOver={dragOverTarget?.type === 'backpack' && dragOverTarget?.index === slot.index}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Нет контейнеров */}
+          {!hasRig && !hasBag && !hasBackpack && (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center text-white/30 font-mono text-xs p-4 border border-dashed border-white/10 rounded-lg">
+                <div className="text-2xl mb-2 opacity-50">📦</div>
+                <div>Нет контейнеров</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Ценность - футер */}
-      <div className="mt-3 pt-3 border-t border-white/20 flex-shrink-0">
-        <div className="flex items-center justify-between p-2 bg-gradient-to-r from-amber-900/20 to-transparent rounded-lg">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">💰</span>
-            <span className="text-white/60 font-mono text-xs uppercase tracking-wider">
-              Общая ценность
-            </span>
-          </div>
-          <div className="text-right">
-            <div className="text-amber-400 font-mono text-xl font-bold tracking-wide drop-shadow-lg">
-              {formatRoubles(totalValue)}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* Item Popup */}
+      {selectedItem && (
+        <ItemPopup
+          item={selectedItem.item}
+          position={selectedItem.position}
+          onClose={() => setSelectedItem(null)}
+          onUse={handleUseItem}
+          onDrop={handleDropItem}
+          currentStamina={currentStamina}
+        />
+      )}
     </div>
   );
 }
