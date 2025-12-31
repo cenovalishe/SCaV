@@ -355,6 +355,26 @@ export async function applyDamage(gameId: string, playerId: string, damage: numb
   }
 }
 
+export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | null) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
+
+    if (savedPlayerId) {
+      const doc = await playersRef.doc(savedPlayerId).get();
+      if (doc.exists) return { success: true, playerId: savedPlayerId };
+    }
+
+    return { success: false, needsSlotSelection: true };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: "Failed to check player" };
+  }
+}
+
 // /END_ANCHOR:GAMEACTIONS/STAMINA
 
 // ═══════════════════════════════════════════════════════════════════════════════
