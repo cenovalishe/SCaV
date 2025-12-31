@@ -267,7 +267,7 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         san: 100,
         stamina: 7,
         maxStamina: 7,
-        stealth: 3,
+        stealth: 0,
       },
       inventory: ["flashlight"],
       chosenBranch: null,
