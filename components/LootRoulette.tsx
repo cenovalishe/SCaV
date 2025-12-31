@@ -89,7 +89,8 @@ export default function LootRoulette({
   const ITEM_WIDTH = 100; // Ширина одного предмета
   const VISIBLE_ITEMS = 7; // Видимых предметов
   const WINNING_INDEX_1 = 34; // Индекс первого выигрышного предмета (под левой стрелкой)
-  const WINNING_INDEX_2 = 36; // Индекс второго выигрышного предмета (под правой стрелкой, через 1)
+  const WINNING_INDEX_2 = 36; // Индекс второго выигрышного предмета (под правой стрелкой, через 1 предмет)
+  const ARROW_GAP = (WINNING_INDEX_2 - WINNING_INDEX_1) * ITEM_WIDTH; // Расстояние между стрелками = 200px
 
   // Инициализация
   useEffect(() => {
@@ -110,8 +111,8 @@ export default function LootRoulette({
 
     // Целевой offset чтобы выигрышные предметы были под стрелками
     // Левая стрелка над WINNING_INDEX_1, правая стрелка над WINNING_INDEX_2
-    const centerIndex = (WINNING_INDEX_1 + WINNING_INDEX_2) / 2; // 35 - центр между двумя предметами
-    const targetOffset = (centerIndex - Math.floor(VISIBLE_ITEMS / 2)) * ITEM_WIDTH;
+    // Центрируем на WINNING_INDEX_1 (он будет точно под первой стрелкой)
+    const targetOffset = (WINNING_INDEX_1 - Math.floor(VISIBLE_ITEMS / 2)) * ITEM_WIDTH;
 
     // Анимация
     let startTime: number;
@@ -193,8 +194,8 @@ export default function LootRoulette({
               drop-shadow-[0_0_10px_rgba(251,191,36,0.8)]" />
           </div>
 
-          {/* Второй указатель (для второго предмета - через один предмет вправо) */}
-          <div className="absolute top-0 z-20" style={{ left: `calc(50% + ${ITEM_WIDTH}px)`, transform: 'translateX(-50%) translateY(-8px)' }}>
+          {/* Второй указатель (для второго предмета - через один предмет) */}
+          <div className="absolute top-0 z-20" style={{ left: `calc(50% + ${ARROW_GAP}px)`, transform: 'translateX(-50%) translateY(-8px)' }}>
             <div className="w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-orange-400
               drop-shadow-[0_0_10px_rgba(249,115,22,0.8)]" />
           </div>
@@ -211,7 +212,7 @@ export default function LootRoulette({
             <div className="absolute top-0 bottom-0 left-1/2 w-px bg-amber-400/50 z-10" />
             {/* Вторая линия победителя (через один предмет) */}
             <div className="absolute top-0 bottom-0 z-10"
-              style={{ left: `calc(50% + ${ITEM_WIDTH}px)`, width: '1px', background: 'rgba(249, 115, 22, 0.5)' }} />
+              style={{ left: `calc(50% + ${ARROW_GAP}px)`, width: '1px', background: 'rgba(249, 115, 22, 0.5)' }} />
 
             {/* Предметы */}
             <div
