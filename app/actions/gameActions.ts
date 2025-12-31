@@ -46,7 +46,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { dbAdmin } from '@/lib/firebaseAdmin';
-import { MAP_NODES_DATA } from '@/lib/mapData';
+import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -159,19 +159,33 @@ export async function movePlayer(
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    // 2. Двигаем аниматроников (AI Movement)
+    // 2. Двигаем аниматроников (AI Movement) с учётом допустимых зон
     const gameRef = dbAdmin.collection('games').doc(gameId);
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
     const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
       const enemyData = enemyDoc.data();
+      const enemyId = enemyDoc.id as AnimatronicType;
+
       // Шанс передвижения врага (можно настроить)
       if (Math.random() > 0.6) {
         const enemyNode = MAP_NODES_DATA.find(n => n.id === enemyData.currentNode);
         if (enemyNode && enemyNode.neighbors.length > 0) {
-          const nextNode = enemyNode.neighbors[Math.floor(Math.random() * enemyNode.neighbors.length)];
-          return enemyDoc.ref.update({ currentNode: nextNode });
+          // Получаем допустимые ноды для данного аниматроника
+          const animatronicData = ANIMATRONIC_SPAWNS.find(a => a.id === enemyId);
+          const allowedNodes = animatronicData?.allowedNodes || [];
+
+          // Фильтруем соседей - только те, которые в допустимой зоне
+          const validNeighbors = enemyNode.neighbors.filter(neighborId =>
+            allowedNodes.includes(neighborId)
+          );
+
+          // Если есть допустимые соседи, двигаемся в случайного из них
+          if (validNeighbors.length > 0) {
+            const nextNode = validNeighbors[Math.floor(Math.random() * validNeighbors.length)];
+            return enemyDoc.ref.update({ currentNode: nextNode });
+          }
         }
       }
       return Promise.resolve();
@@ -267,9 +281,15 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         san: 100,
         stamina: 7,
         maxStamina: 7,
-        stealth: 0,
+        stealth: 0,      // Скрытность: 0
+        attack: 1,       // Атака: 1
+        defense: 1,      // Защита: 1
+        speed: 1,        // Скорость: 1
+        luck: 0,         // Удача: 0
+        capacity: 20,    // Вместимость
+        maxHp: 100,      // Максимальное ХП
       },
-      inventory: ["flashlight"],
+      inventory: [],     // Пустой инвентарь
       chosenBranch: null,
       hasReachedY: false,
       visitedNodes: []

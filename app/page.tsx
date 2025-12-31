@@ -37,13 +37,13 @@ import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 
-// Дефолтные значения
+// Дефолтные значения (соответствуют начальным характеристикам в createPlayerInSlot)
 const DEFAULT_STATS: CharacterStats = {
-  attack: 5,
-  defense: 3,
-  speed: 4,
-  stealth: 0,
-  luck: 0,
+  attack: 1,       // Атака: 1
+  defense: 1,      // Защита: 1
+  speed: 1,        // Скорость: 1
+  stealth: 0,      // Скрытность: 0
+  luck: 0,         // Удача: 0
   capacity: 20,
   hp: 100,
   maxHp: 100,
@@ -51,26 +51,26 @@ const DEFAULT_STATS: CharacterStats = {
   maxStamina: 7
 };
 
-// ★ Стартовая экипировка БЕЗ контейнеров (появятся при нахождении)
+// ★ Стартовая экипировка - ПУСТАЯ (без предметов)
 const DEFAULT_EQUIPMENT: Equipment = {
   helmet: null,
   armor: null,
   clothes: null,
   pockets: [null, null, null, null],
-  specials: ['flashlight', null, null],
+  specials: [null, null, null],  // ★ Без фонарика
   weapon: null,
   scope: null,
   tactical: null,
   suppressor: null,
   rig: null,      // ★ БЕЗ разгрузки по умолчанию
   bag: null,      // ★ БЕЗ сумки по умолчанию
-  backpack: {     // Только рюкзак со стартовыми предметами
+  backpack: {     // Пустой рюкзак
     id: 'bp_1',
     type: 'backpack',
     name: 'Backpack',
     nameRu: 'Рюкзак',
     slots: 8,
-    items: ['medkit', 'bandage', null, null, null, null, null, null]
+    items: [null, null, null, null, null, null, null, null]  // ★ Пустой инвентарь
   }
 };
 
@@ -278,11 +278,14 @@ export default function GameBoard() {
   }, [playerId, player, currentStamina, enemies, addLogEntry]);
 
   // Выполнение перемещения
-  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number) => {
+  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
     if (!playerId) return;
 
     try {
-      await updateStamina(GAME_ID, playerId, -staminaCost);
+      // Списываем выносливость только если не пропускаем (например, после encounter с колесом)
+      if (!skipStaminaCost) {
+        await updateStamina(GAME_ID, playerId, -staminaCost);
+      }
       const res = await movePlayer(GAME_ID, playerId, targetNodeId);
 
       if (res.success) {
@@ -292,12 +295,25 @@ export default function GameBoard() {
         if (targetNode) {
           setViewingNode(null); // Сбрасываем на текущую позицию
         }
+
+        // ★ Обработка столкновения с врагом (если враг переместился на ту же клетку одновременно)
+        if (res.collision?.hasCollision && res.collision.enemyType) {
+          // Показываем encounter с врагом, который переместился на ту же клетку
+          setEncounter({
+            active: true,
+            enemyName: res.collision.enemyType,
+            enemyType: res.collision.enemyType,
+            pendingMove: null, // Уже переместились
+            staminaCost: 0,
+            previousNode: targetNodeId
+          });
+        }
       } else {
         addLogEntry(res.message || 'Ошибка перемещения', 'system');
       }
     } catch (error) {
       console.error("Ошибка при перемещении:", error);
-      addLogEntry('Ошибка при перемещении', 'system');
+      addLogEntry('Ошибка при перемещения', 'system');
     }
   }, [playerId, addLogEntry]);
 
@@ -307,6 +323,7 @@ export default function GameBoard() {
 
     if (result.evaded) {
       addLogEntry(`Уклонение от ${result.animatronicName}! (бросок: ${result.diceRoll})`, 'combat');
+      // Перемещаемся только если есть pendingMove (т.е. ещё не переместились)
       if (encounter.pendingMove) {
         await executeMove(encounter.pendingMove.id, encounter.staminaCost);
       }
@@ -319,9 +336,13 @@ export default function GameBoard() {
 
       if (result.retreated) {
         addLogEntry(`Отступление на предыдущую позицию`, 'move');
+        // При отступлении остаёмся на месте (previousNode)
       } else {
+        // Перемещаемся только если есть pendingMove (т.е. ещё не переместились)
+        // И если staminaCost > 0, значит выносливость ещё не была обнулена колесом
         if (encounter.pendingMove) {
-          await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+          // Выносливость уже обнулена колесом (onStaminaReset), не списываем снова
+          await executeMove(encounter.pendingMove.id, encounter.staminaCost, true);
         }
       }
     }
