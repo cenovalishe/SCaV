@@ -618,9 +618,15 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
       const docRef = enemiesRef.doc(animatronic.id);
       batch.set(docRef, {
         id: animatronic.id,
-        type: animatronic.name,
-        currentNode: animatronic.startNode,
-        color: getAnimatronicColor(animatronic.id)
+        type: animatronic.id,       // ИСПРАВЛЕНО: используем id (или nameEn) вместо name
+        name: animatronic.nameRu,   // ДОБАВЛЕНО: поле name обязательно для AnimatronicState
+        currentNode: animatronic.allowedNodes[0], // ИСПРАВЛЕНО: startNode нет, берем первый разрешенный узел
+        hp: 100,                    // ДОБАВЛЕНО: обязательные поля для AnimatronicState
+        maxHp: 100,
+        damage: 10,
+        moveChance: 50,
+        aggressionLevel: 1,
+        color: animatronic.color    // В mapData свойство color уже есть, функция не нужна
       });
     }
 
