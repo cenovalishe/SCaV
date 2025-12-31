@@ -25,7 +25,7 @@ import { useGame } from '@/hooks/useGame';
 import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded } from '@/app/actions/gameActions';
 import { MAP_NODES_DATA, MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
-import { getItemById } from '@/lib/itemData';
+import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
 
 // Компоненты
 import TabbedPanel from '@/components/TabbedPanel';
@@ -35,6 +35,7 @@ import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
 import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
+import OfficeMechanic from '@/components/OfficeMechanic';
 
 // Дефолтные значения (соответствуют начальным характеристикам в createPlayerInSlot)
 const DEFAULT_STATS: CharacterStats = {
@@ -106,6 +107,9 @@ export default function GameBoard() {
 
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
+
+  // ★ Состояние механики офиса (маршрутная точка Y)
+  const [officeMechanic, setOfficeMechanic] = useState<{ active: boolean } | null>(null);
 
   // Функция добавления записи в лог (полная история)
   const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
@@ -189,10 +193,17 @@ export default function GameBoard() {
   // Данные текущего узла
   const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
 
-  // Статы из Firebase
-  const currentStamina = player?.stats?.stamina ?? DEFAULT_STATS.stamina;
-  const currentStealth = player?.stats?.stealth ?? DEFAULT_STATS.stealth;
-  const maxStamina = player?.stats?.maxStamina ?? DEFAULT_STATS.maxStamina;
+  // ★ FIX: Вычисляем эффективные статы с учётом экипировки
+  const baseStats: CharacterStats = player?.stats
+    ? { ...DEFAULT_STATS, ...player.stats }
+    : DEFAULT_STATS;
+
+  const { stats: effectiveStats } = calculateEffectiveStats(baseStats, equipment);
+
+  // Статы из Firebase (с учётом экипировки)
+  const currentStamina = effectiveStats.stamina;
+  const currentStealth = effectiveStats.stealth;
+  const maxStamina = effectiveStats.maxStamina;
 
   // ★ Определяем какую ноду показывать на камере
   const cameraDisplayNode = viewingNode || currentNodeData;
@@ -286,7 +297,8 @@ export default function GameBoard() {
       if (!skipStaminaCost) {
         await updateStamina(GAME_ID, playerId, -staminaCost);
       }
-      const res = await movePlayer(GAME_ID, playerId, targetNodeId);
+      // FIX: Передаём экипировку для проверки ключ-карты при входе в SF
+      const res = await movePlayer(GAME_ID, playerId, targetNodeId, equipment);
 
       if (res.success) {
         const targetNode = getNodeById(targetNodeId);
@@ -308,6 +320,12 @@ export default function GameBoard() {
             previousNode: targetNodeId
           });
         }
+
+        // ★ Запуск механики офиса при входе в ноду Y
+        if (targetNodeId === 'Y') {
+          addLogEntry('🏢 Вы вошли в офис охранника!', 'system');
+          setOfficeMechanic({ active: true });
+        }
       } else {
         addLogEntry(res.message || 'Ошибка перемещения', 'system');
       }
@@ -315,7 +333,7 @@ export default function GameBoard() {
       console.error("Ошибка при перемещении:", error);
       addLogEntry('Ошибка при перемещения', 'system');
     }
-  }, [playerId, addLogEntry]);
+  }, [playerId, equipment, addLogEntry]);
 
   // Обработка результата встречи
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
@@ -358,6 +376,46 @@ export default function GameBoard() {
     await updateStamina(GAME_ID, playerId, -currentStamina);
     addLogEntry('Выносливость обнулена!', 'system');
   }, [playerId, currentStamina, addLogEntry]);
+
+  // ★ Обработчик завершения механики офиса
+  const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
+    setOfficeMechanic(null);
+
+    if (result.damageReceived > 0) {
+      await applyDamage(GAME_ID, playerId!, result.damageReceived);
+      addLogEntry(`Получено урона за смену: ${result.damageReceived}`, 'combat');
+    }
+
+    if (result.receivedKeyCard) {
+      // Добавляем ключ-карту в спец-слот
+      setEquipment(prev => {
+        const newEquipment = JSON.parse(JSON.stringify(prev)) as Equipment;
+
+        // Ищем первый свободный спец-слот
+        if (newEquipment.specials) {
+          const emptySlot = newEquipment.specials.findIndex(s => s === null);
+          if (emptySlot !== -1) {
+            newEquipment.specials[emptySlot] = 'key_card';
+            return newEquipment;
+          }
+        }
+
+        // Если спец-слоты заняты, пробуем карманы
+        const pocketSlot = newEquipment.pockets.findIndex(s => s === null);
+        if (pocketSlot !== -1) {
+          newEquipment.pockets[pocketSlot] = 'key_card';
+          return newEquipment;
+        }
+
+        addLogEntry('Инвентарь полон! Ключ-карта потеряна!', 'system');
+        return prev;
+      });
+
+      addLogEntry('🗝️ Получена ключ-карта! Теперь вы можете вернуться на Старт/Финиш.', 'loot');
+    } else {
+      addLogEntry('Смена не пройдена... Попробуйте ещё раз.', 'system');
+    }
+  }, [playerId, addLogEntry]);
 
   // ★ Возможные предметы для лут-рулетки
   const LOOT_CONTAINER_ITEMS = [
@@ -550,7 +608,7 @@ export default function GameBoard() {
         <EncounterSystem
           animatronicName={encounter.enemyName}
           animatronicType={encounter.enemyType}
-          playerStealth={player?.stats?.stealth ?? DEFAULT_STATS.stealth}
+          playerStealth={currentStealth}
           onComplete={handleEncounterComplete}
           onStaminaReset={handleStaminaReset}
         />
@@ -562,6 +620,14 @@ export default function GameBoard() {
           possibleItems={lootRoulette.possibleItems}
           onComplete={handleLootRouletteComplete}
           onClose={() => setLootRoulette(null)}
+        />
+      )}
+
+      {/* ★ Механика офиса (маршрутная точка Y) */}
+      {officeMechanic?.active && (
+        <OfficeMechanic
+          onComplete={handleOfficeMechanicComplete}
+          onClose={() => setOfficeMechanic(null)}
         />
       )}
 
@@ -597,7 +663,7 @@ export default function GameBoard() {
           {/* Верхняя панель - Вкладки */}
           <div className="h-[55%] border-b border-white/10">
             <TabbedPanel
-              stats={{ ...DEFAULT_STATS, hp: player.stats.hp, stamina: currentStamina }}
+              stats={{ ...effectiveStats, hp: player.stats.hp, stamina: currentStamina }}
               playerName={(player as any).name || playerId.slice(0, 8)}
               equipment={equipment}  // ★ Динамическая экипировка
               onEquipmentChange={handleEquipmentChange}  // ★ Callback изменения
@@ -641,17 +707,6 @@ export default function GameBoard() {
               />
             </div>
             <span className="text-red-400 font-bold">{player.stats.hp}%</span>
-          </div>
-          {/* Sanity */}
-          <div className="flex items-center gap-2">
-            <span className="text-blue-400">🧠</span>
-            <div className="w-28 h-2.5 bg-zinc-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-blue-600 to-blue-500 transition-all rounded-full"
-                style={{ width: `${player.stats.san}%` }}
-              />
-            </div>
-            <span className="text-blue-400 font-bold">{player.stats.san}%</span>
           </div>
           <div className="text-white/20">│</div>
           {/* Stamina */}

@@ -35,12 +35,13 @@
  * ├─────────────────────────────────────────────────────────────────────────────┤
  * │                                                                             │
  * │   medkit     → hp += 30 (max 100)                                          │
- * │   sedative   → san += 25 (max 100)                                         │
- * │   adrenaline → hp += 5, san -= 10                                          │
+ * │   adrenaline → hp += 5, speed += 2, stamina += 3                           │
  * │   bandage    → hp += 10 (max 100)                                          │
  * │   pills      → hp += 5 (max 100)                                           │
- * │   food       → hp += 5 (max 100)                                           │
- * │   soda       → hp += 3 (max 100)                                           │
+ * │   food       → stamina += 2                                                │
+ * │   soda       → stamina += 1                                                │
+ * │   pizza      → stamina += 1                                                │
+ * │   cupcake    → stamina += 1                                                │
  * │                                                                             │
  * │ FLOW:                                                                       │
  * │   1. Проверить наличие предмета в inventory[]                              │
@@ -61,12 +62,13 @@ import { revalidatePath } from 'next/cache';
 // Конфигурация эффектов предметов
 const ITEM_EFFECTS: Record<string, (stats: any) => any> = {
   "medkit": (stats) => ({ ...stats, hp: Math.min(stats.hp + 30, 100) }),
-  "sedative": (stats) => ({ ...stats, san: Math.min(stats.san + 25, 100) }),
-  "adrenaline": (stats) => ({ ...stats, hp: stats.hp + 5, san: stats.san - 10 }),
+  "adrenaline": (stats) => ({ ...stats, hp: Math.min(stats.hp + 5, 100), speed: (stats.speed || 0) + 2, stamina: Math.min((stats.stamina || 0) + 3, stats.maxStamina || 7) }),
   "bandage": (stats) => ({ ...stats, hp: Math.min(stats.hp + 10, 100) }),
   "pills": (stats) => ({ ...stats, hp: Math.min(stats.hp + 5, 100) }),
-  "food": (stats) => ({ ...stats, hp: Math.min(stats.hp + 5, 100) }),
-  "soda": (stats) => ({ ...stats, hp: Math.min(stats.hp + 3, 100) }),
+  "food": (stats) => ({ ...stats, stamina: Math.min((stats.stamina || 0) + 2, stats.maxStamina || 7) }),
+  "soda": (stats) => ({ ...stats, stamina: Math.min((stats.stamina || 0) + 1, stats.maxStamina || 7) }),
+  "pizza": (stats) => ({ ...stats, stamina: Math.min((stats.stamina || 0) + 1, stats.maxStamina || 7) }),
+  "cupcake": (stats) => ({ ...stats, stamina: Math.min((stats.stamina || 0) + 1, stats.maxStamina || 7) }),
 };
 
 export async function useItem(gameId: string, playerId: string, itemKey: string) {
@@ -92,7 +94,7 @@ export async function useItem(gameId: string, playerId: string, itemKey: string)
     const effectFn = ITEM_EFFECTS[itemKey];
     if (!effectFn) return { success: false, message: "This item cannot be used directly." };
 
-    const newStats = effectFn(data?.stats || { hp: 100, san: 100 });
+    const newStats = effectFn(data?.stats || { hp: 100, stamina: 7, maxStamina: 7, speed: 1 });
 
     // Атомарное обновление
     await playerRef.update({

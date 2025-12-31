@@ -170,11 +170,13 @@ function SubCellSlot2x2({
           );
         }
 
-        // FIX: Безопасная проверка размера (item.size || 0)
-        // Для предметов 2x1 - рендерим на 2 ячейки (горизонтально или вертикально)
+        // FIX: Безопасная проверка размера для предметов 2x1 (горизонтальные) и 1x2 (вертикальные)
         if (item && (item.size || 0) === 2) {
-          const isHorizontal = i === 0 || i === 2; // Верхний или нижний ряд
-          if (isHorizontal) {
+          const isHorizontal = (item.width || 1) === 2 && (item.height || 1) === 1;
+          const isVertical = (item.width || 1) === 1 && (item.height || 1) === 2;
+
+          // Горизонтальный предмет (2x1) - рендерим если в левой ячейке ряда (0 или 2)
+          if (isHorizontal && (i === 0 || i === 2)) {
             return (
               <div
                 key={i}
@@ -186,10 +188,34 @@ function SubCellSlot2x2({
                 className={`
                   col-span-2 flex items-center justify-center
                   bg-black/30 border border-white/10 rounded cursor-pointer
-                  hover:scale-[1.02] hover:border-white/10 transition-all
+                  hover:scale-[1.02] hover:border-white/20 transition-all
                   ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
                 `}
-                title={item ? `${item.nameRu} (${item.size || 2} ячеек)` : undefined}
+                title={item ? `${item.nameRu} (2x1)` : undefined}
+              >
+                <span className="text-2xl drop-shadow-md">{item.icon}</span>
+              </div>
+            );
+          }
+
+          // Вертикальный предмет (1x2) - рендерим если в верхней ячейке колонки (0 или 1)
+          if (isVertical && (i === 0 || i === 1)) {
+            return (
+              <div
+                key={i}
+                draggable={!!item}
+                onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+                onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+                onDrop={(e) => onDrop?.(e, i)}
+                onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+                className={`
+                  row-span-2 flex items-center justify-center
+                  bg-black/30 border border-white/10 rounded cursor-pointer
+                  hover:scale-[1.02] hover:border-white/20 transition-all
+                  ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+                `}
+                style={{ gridColumn: i === 0 ? 1 : 2, gridRow: '1 / 3' }}
+                title={item ? `${item.nameRu} (1x2)` : undefined}
               >
                 <span className="text-2xl drop-shadow-md">{item.icon}</span>
               </div>
@@ -425,7 +451,41 @@ export default function InventoryTab({
   // ════════════════════════════════════════════════════════════════════════
   // FIX: Исправленная функция Drop с поддержкой спец-слотов, защитой от дюпа
   // и обменом предметами при перемещении на занятую ячейку
+  // FIX v2: Корректная обработка размеров предметов в подъячейках 2x2
   // ════════════════════════════════════════════════════════════════════════
+
+  // Вспомогательная функция для получения индексов, занимаемых предметом в сетке 2x2
+  const getOccupiedIndicesInGrid = (startIndex: number, item: Item | undefined): number[] => {
+    if (!item) return [startIndex];
+
+    const width = item.width || 1;
+    const height = item.height || 1;
+    const indices: number[] = [];
+
+    // Сетка 2x2: [0, 1]
+    //            [2, 3]
+    const startX = startIndex % 2;
+    const startY = Math.floor(startIndex / 2);
+
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const cellX = startX + x;
+        const cellY = startY + y;
+        // Проверяем границы сетки 2x2
+        if (cellX < 2 && cellY < 2) {
+          indices.push(cellY * 2 + cellX);
+        }
+      }
+    }
+
+    return indices;
+  };
+
+  // Очищает все ячейки, занятые предметом в контейнере
+  const clearItemFromContainer = (container: Container, itemId: string) => {
+    container.items = container.items.map(item => item === itemId ? null : item);
+  };
+
   const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
     e.preventDefault();
     if (!dragSource || !onEquipmentChange) {
@@ -434,6 +494,7 @@ export default function InventoryTab({
     }
 
     const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+    const draggedItem = getItemById(dragSource.itemId);
 
     // --- 0. ПОЛУЧАЕМ ПРЕДМЕТ В ЦЕЛЕВОЙ ЯЧЕЙКЕ (для обмена) ---
     let targetItemId: string | null = null;
@@ -453,21 +514,25 @@ export default function InventoryTab({
       targetItemId = (newEquipment as any)[target] || null;
     }
 
-    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА (и размещение предмета из цели, если был) ---
+    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
     if (dragSource.type === 'container' && dragSource.containerType) {
       const container = newEquipment[dragSource.containerType];
-      if (container && dragSource.index !== undefined) {
-        container.items[dragSource.index] = targetItemId; // Обмен: кладём предмет из цели
+      if (container) {
+        // FIX: Очищаем все ячейки, занятые этим предметом
+        clearItemFromContainer(container, dragSource.itemId);
+        // Если есть предмет для обмена, размещаем его в первую свободную ячейку источника
+        if (targetItemId && dragSource.index !== undefined) {
+          container.items[dragSource.index] = targetItemId;
+        }
       }
     } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
       newEquipment.pockets[dragSource.index] = targetItemId; // Обмен
     } else if (dragSource.type === 'equipment' && dragSource.slot) {
-      // FIX: Проверяем, является ли слот специальным
       if (dragSource.slot.startsWith('special')) {
         const idx = parseInt(dragSource.slot.replace('special', ''));
-        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId; // Обмен
+        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId;
       } else {
-        (newEquipment as any)[dragSource.slot] = targetItemId; // Обмен
+        (newEquipment as any)[dragSource.slot] = targetItemId;
       }
     }
 
@@ -475,13 +540,37 @@ export default function InventoryTab({
     if (['rig', 'bag', 'backpack'].includes(target)) {
       const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
       if (container && index !== undefined) {
-        container.items[index] = dragSource.itemId;
+        // FIX: Определяем индекс внутри слота 2x2 (0-3)
+        const slotBaseIndex = Math.floor(index / 4) * 4;
+        const subCellIndex = index % 4;
+
+        // Получаем индексы всех ячеек, которые займёт предмет
+        const occupiedIndices = getOccupiedIndicesInGrid(subCellIndex, draggedItem);
+
+        // Очищаем целевые ячейки от других предметов (если там что-то было)
+        for (const relIdx of occupiedIndices) {
+          const absIdx = slotBaseIndex + relIdx;
+          if (absIdx < container.items.length && container.items[absIdx] !== dragSource.itemId) {
+            // Если там был другой предмет, очищаем его полностью
+            const existingItem = container.items[absIdx];
+            if (existingItem) {
+              clearItemFromContainer(container, existingItem);
+            }
+          }
+        }
+
+        // Размещаем предмет во все занимаемые ячейки
+        for (const relIdx of occupiedIndices) {
+          const absIdx = slotBaseIndex + relIdx;
+          if (absIdx < container.items.length) {
+            container.items[absIdx] = dragSource.itemId;
+          }
+        }
       }
     } else if (target.startsWith('pocket')) {
       const pocketIndex = parseInt(target.replace('pocket', ''));
       newEquipment.pockets[pocketIndex] = dragSource.itemId;
     } else if (target.startsWith('special')) {
-      // FIX: Обработка добавления в спец-слоты
       const idx = parseInt(target.replace('special', ''));
       if (newEquipment.specials) newEquipment.specials[idx] = dragSource.itemId;
     } else {
