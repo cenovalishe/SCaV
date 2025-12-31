@@ -78,6 +78,7 @@ const SLOT_GAP = 4; // px
 // - 2 предмета 2x1 (каждый занимает 2 ячейки)
 // - 1 предмет 2x1 + 2 предмета 1x1
 // - 4 предмета 1x1
+// Компонент слота 2x2 с подъячейками
 function SubCellSlot2x2({
   items,
   color = 'zinc',
@@ -123,6 +124,7 @@ function SubCellSlot2x2({
     }
 
     const item = getItemById(itemId);
+    // FIX: Используем (item?.size || 1) для безопасности
     const itemSize = item?.size || 1;
     processedItems.add(itemId);
     cellContents[i] = { itemId, isMain: true, size: itemSize };
@@ -142,8 +144,9 @@ function SubCellSlot2x2({
           return <div key={i} className="w-full h-full" />;
         }
 
+        // FIX: Безопасная проверка размера (item.size || 0)
         // Для предметов 2x2 - рендерим на все 4 ячейки
-        if (item && item.size >= 4) {
+        if (item && (item.size || 0) >= 4) {
           if (i !== 0) return null;
           return (
             <div
@@ -160,15 +163,16 @@ function SubCellSlot2x2({
                 ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
               `}
               style={{ width: '100%', height: '100%' }}
-              title={item ? `${item.nameRu} (${item.size} ячеек)` : undefined}
+              title={item ? `${item.nameRu} (${item.size || 4} ячеек)` : undefined}
             >
               <span className="text-3xl drop-shadow-md">{item.icon}</span>
             </div>
           );
         }
 
+        // FIX: Безопасная проверка размера (item.size || 0)
         // Для предметов 2x1 - рендерим на 2 ячейки (горизонтально или вертикально)
-        if (item && item.size === 2) {
+        if (item && (item.size || 0) === 2) {
           const isHorizontal = i === 0 || i === 2; // Верхний или нижний ряд
           if (isHorizontal) {
             return (
@@ -182,10 +186,10 @@ function SubCellSlot2x2({
                 className={`
                   col-span-2 flex items-center justify-center
                   bg-black/30 border border-white/10 rounded cursor-pointer
-                  hover:scale-[1.02] hover:border-white/30 transition-all
+                  hover:scale-[1.02] hover:border-white/10 transition-all
                   ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
                 `}
-                title={item ? `${item.nameRu} (${item.size} ячеек)` : undefined}
+                title={item ? `${item.nameRu} (${item.size || 2} ячеек)` : undefined}
               >
                 <span className="text-2xl drop-shadow-md">{item.icon}</span>
               </div>
