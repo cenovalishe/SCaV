@@ -269,55 +269,55 @@ export default function InventoryTab({
     setDragOverTarget(null);
   }, []);
 
-const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
-  e.preventDefault();
-  if (!dragSource || !onEquipmentChange) {
-    handleDragEnd();
-    return;
-  }
+ const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
+   e.preventDefault();
+   if (!dragSource || !onEquipmentChange) {
+     handleDragEnd();
+     return;
+   }
 
-  const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+   const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
 
-  // --- УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
-  if (dragSource.type === 'container' && dragSource.containerType) {
-    const container = newEquipment[dragSource.containerType];
-    if (container && dragSource.index !== undefined) {
-      container.items[dragSource.index] = null;
-    }
-  } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
-    newEquipment.pockets[dragSource.index] = null;
-  } else if (dragSource.type === 'equipment' && dragSource.slot) {
-    // [FIX 1] Проверяем, является ли слот специальным (массив specials)
-    if (dragSource.slot.startsWith('special')) {
-      const idx = parseInt(dragSource.slot.replace('special', ''));
-      if (newEquipment.specials) newEquipment.specials[idx] = null;
-    } else {
-      // Стандартные слоты (helmet, armor...)
-      (newEquipment as any)[dragSource.slot] = null;
-    }
-  }
+   // --- УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
+   if (dragSource.type === 'container' && dragSource.containerType) {
+     const container = newEquipment[dragSource.containerType];
+     if (container && dragSource.index !== undefined) {
+       container.items[dragSource.index] = null;
+     }
+   } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
+     newEquipment.pockets[dragSource.index] = null;
+   } else if (dragSource.type === 'equipment' && dragSource.slot) {
+     // [FIX 1] Проверяем, является ли слот специальным (массив specials)
+     if (dragSource.slot.startsWith('special')) {
+       const idx = parseInt(dragSource.slot.replace('special', ''));
+       if (newEquipment.specials) newEquipment.specials[idx] = null;
+     } else {
+       // Стандартные слоты (helmet, armor...)
+       (newEquipment as any)[dragSource.slot] = null;
+     }
+   }
 
-  // --- ДОБАВЛЕНИЕ В ЦЕЛЬ ---
-  if (['rig', 'bag', 'backpack'].includes(target)) {
-    const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
-    if (container && index !== undefined) {
-      container.items[index] = dragSource.itemId;
-    }
-  } else if (target.startsWith('pocket')) {
-    const pocketIndex = parseInt(target.replace('pocket', ''));
-    newEquipment.pockets[pocketIndex] = dragSource.itemId;
-  } else if (target.startsWith('special')) {
-    // [FIX 2] Обработка добавления в спец-слоты
-    const idx = parseInt(target.replace('special', ''));
-    if (newEquipment.specials) newEquipment.specials[idx] = dragSource.itemId;
-  } else {
-    // Стандартные слоты
-    (newEquipment as any)[target] = dragSource.itemId;
-  }
+   // --- ДОБАВЛЕНИЕ В ЦЕЛЬ ---
+   if (['rig', 'bag', 'backpack'].includes(target)) {
+     const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
+     if (container && index !== undefined) {
+       container.items[index] = dragSource.itemId;
+     }
+   } else if (target.startsWith('pocket')) {
+     const pocketIndex = parseInt(target.replace('pocket', ''));
+     newEquipment.pockets[pocketIndex] = dragSource.itemId;
+   } else if (target.startsWith('special')) {
+     // [FIX 2] Обработка добавления в спец-слоты
+     const idx = parseInt(target.replace('special', ''));
+     if (newEquipment.specials) newEquipment.specials[idx] = dragSource.itemId;
+   } else {
+     // Стандартные слоты
+     (newEquipment as any)[target] = dragSource.itemId;
+   }
 
-  onEquipmentChange(newEquipment);
-  handleDragEnd();
-}, [dragSource, equipment, onEquipmentChange, handleDragEnd]);
+   onEquipmentChange(newEquipment);
+   handleDragEnd();
+ }, [dragSource, equipment, onEquipmentChange, handleDragEnd]);
 
     // Remove from source
     if (dragSource.type === 'container' && dragSource.containerType) {
