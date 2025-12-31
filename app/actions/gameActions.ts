@@ -17,6 +17,7 @@
  * /START_ANCHOR:GAMEACTIONS/STAMINA ........... Функции updateStamina(), applyDamage()
  * /START_ANCHOR:GAMEACTIONS/LOOT .............. Функция lootLocation()
  * /START_ANCHOR:GAMEACTIONS/TURNS ............. Функции checkAllPlayersExhausted(), startNewTurnForAll()
+ * /START_ANCHOR:GAMEACTIONS/RESPAWN ........... Автоматический респавн аниматроников
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * EXPORTS OVERVIEW:
@@ -32,6 +33,7 @@
  *   lootLocation(gameId, playerId)             → { success, items }
  *   checkAllPlayersExhausted(gameId)           → { allExhausted }
  *   startNewTurnForAll(gameId)                 → { success, playerResults }
+ *   respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
@@ -205,9 +207,10 @@ export async function movePlayer(
     const updatedEnemiesSnap = await enemiesRef.get();
     
     // Фильтруем врагов, которые находятся в той же ноде, куда пришел игрок
+    // [PATCH] Удалена проверка hp у аниматроников
     const enemiesInNode = updatedEnemiesSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() } as any))
-      .filter(e => e.currentNode === targetNodeId && e.hp > 0);
+      .filter(e => e.currentNode === targetNodeId);
 
     let finalStatus = "IDLE";
     let message = `Moved to ${targetNodeId}`;
@@ -587,3 +590,62 @@ export async function newTurn(gameId: string, playerId: string) {
 }
 
 // /END_ANCHOR:GAMEACTIONS/TURNS
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:GAMEACTIONS/RESPAWN
+// [PATCH] Автоматический респавн аниматроников
+// КОНТРАКТ: Создает врагов если коллекция enemies пуста
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function respawnEnemiesIfNeeded(gameId: string) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
+    const enemiesSnap = await enemiesRef.get();
+
+    // Если враги уже есть - ничего не делаем
+    if (!enemiesSnap.empty) {
+      return { success: true, spawned: false, message: 'Enemies already exist' };
+    }
+
+    // Создаем врагов используя данные из ANIMATRONIC_SPAWNS
+    const batch = dbAdmin.batch();
+
+    for (const animatronic of ANIMATRONIC_SPAWNS) {
+      const docRef = enemiesRef.doc(animatronic.id);
+      batch.set(docRef, {
+        id: animatronic.id,
+        type: animatronic.name,
+        currentNode: animatronic.startNode,
+        color: getAnimatronicColor(animatronic.id)
+      });
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+      spawned: true,
+      message: `Spawned ${ANIMATRONIC_SPAWNS.length} enemies`
+    };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: 'Failed to respawn enemies' };
+  }
+}
+
+// Вспомогательная функция для получения цвета аниматроника
+function getAnimatronicColor(id: string): string {
+  const colors: Record<string, string> = {
+    'freddy': '🟤',
+    'bonnie': '🔵',
+    'chica': '🟡',
+    'foxy': '🔴'
+  };
+  return colors[id] || '⚪';
+}
+
+// /END_ANCHOR:GAMEACTIONS/RESPAWN

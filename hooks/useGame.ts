@@ -94,11 +94,11 @@ export type PlayerState = {
   inventory: string[];
 };
 
+// [PATCH] Удален параметр hp у аниматроников
 export type EnemyState = {
   id: string;
   currentNode: string;
   type: string;
-  hp: number;
 };
 
 // /END_ANCHOR:USEGAME/TYPES

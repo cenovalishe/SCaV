@@ -13,11 +13,12 @@ export async function GET() {
   const gameId = 'game_alpha';
   const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
 
+  // [PATCH] Удален параметр hp у аниматроников
   const initialEnemies = [
-    { id: 'freddy', type: 'Freddy', currentNode: '1', hp: 100, color: '🟤' },
-    { id: 'bonnie', type: 'Bonnie', currentNode: '9', hp: 100, color: '🔵' },
-    { id: 'chica', type: 'Chica', currentNode: '4', hp: 100, color: '🟡' },
-    { id: 'foxy', type: 'Foxy', currentNode: '8', hp: 100, color: '🔴' }
+    { id: 'freddy', type: 'Freddy', currentNode: '1', color: '🟤' },
+    { id: 'bonnie', type: 'Bonnie', currentNode: '9', color: '🔵' },
+    { id: 'chica', type: 'Chica', currentNode: '4', color: '🟡' },
+    { id: 'foxy', type: 'Foxy', currentNode: '8', color: '🔴' }
   ];
 
   try {

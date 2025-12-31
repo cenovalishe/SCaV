@@ -22,7 +22,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot } from '@/app/actions/gameActions';
+import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded } from '@/app/actions/gameActions';
 import { MAP_NODES_DATA, MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById } from '@/lib/itemData';
@@ -120,6 +120,9 @@ export default function GameBoard() {
   // Инициализация игрока
   useEffect(() => {
     async function init() {
+      // [PATCH] Автоматический респавн аниматроников если их нет
+      await respawnEnemiesIfNeeded(GAME_ID);
+
       const savedId = localStorage.getItem('scav_player_id');
       const result = await getOrCreatePlayer(GAME_ID, savedId);
 
