@@ -103,13 +103,17 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Текст часа
+      // Текст часа (с правильной ориентацией)
       const midAngle = startAngle + segmentAngle / 2;
       const textX = centerX + Math.cos(midAngle) * (radius * 0.65);
       const textY = centerY + Math.sin(midAngle) * (radius * 0.65);
 
       ctx.save();
       ctx.translate(textX, textY);
+      // Вращаем текст так, чтобы он был читаем (направлен от центра)
+      // Добавляем π/2 чтобы текст был горизонтальным
+      const textRotation = midAngle + Math.PI / 2;
+      ctx.rotate(textRotation);
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 28px monospace';
       ctx.textAlign = 'center';
@@ -170,13 +174,15 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Текст
+      // Текст (с правильной ориентацией)
       const midAngle = startAngle + segmentAngle / 2;
       const textX = centerX + Math.cos(midAngle) * (radius * 0.65);
       const textY = centerY + Math.sin(midAngle) * (radius * 0.65);
 
       ctx.save();
       ctx.translate(textX, textY);
+      const textRotation = midAngle + Math.PI / 2;
+      ctx.rotate(textRotation);
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'center';
@@ -233,13 +239,15 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Текст
+      // Текст (с правильной ориентацией)
       const midAngle = startAngle + segmentAngle / 2;
       const textX = centerX + Math.cos(midAngle) * (radius * 0.65);
       const textY = centerY + Math.sin(midAngle) * (radius * 0.65);
 
       ctx.save();
       ctx.translate(textX, textY);
+      const textRotation = midAngle + Math.PI / 2;
+      ctx.rotate(textRotation);
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 32px monospace';
       ctx.textAlign = 'center';
@@ -261,6 +269,104 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
     ctx.textBaseline = 'middle';
     ctx.fillText('🤖', centerX, centerY);
   }, []);
+
+  // Рисуем колесо урона с комбинированными значениями аниматроников
+  const drawDamageWheel = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 20;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Если нет аниматроников, показываем минимальный урон
+    if (animatronicsAtDoors.length === 0) {
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+      ctx.fillStyle = '#EF4444';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 48px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('10', centerX, centerY);
+      return;
+    }
+
+    // Создаём сегменты для каждого аниматроника + комбинированный урон
+    // Каждый аниматроник имеет свой диапазон урона
+    const damageSegments: { damage: number; color: string; label: string }[] = [];
+
+    // Добавляем сегменты для каждого аниматроника (их индивидуальный урон)
+    animatronicsAtDoors.forEach(a => {
+      const baseDamage = a.aiLevel * 5; // 5-25 урона в зависимости от уровня
+      damageSegments.push({ damage: baseDamage, color: a.color, label: a.name });
+      damageSegments.push({ damage: baseDamage + 5, color: a.color, label: a.name });
+    });
+
+    // Добавляем комбинированные сегменты (урон от всех вместе)
+    if (animatronicsAtDoors.length > 1) {
+      const combinedDamage = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 5, 0);
+      damageSegments.push({ damage: combinedDamage, color: '#DC2626', label: 'ВСЕ!' });
+      damageSegments.push({ damage: Math.round(combinedDamage * 1.5), color: '#7F1D1D', label: 'КРИТ!' });
+    }
+
+    const segments = damageSegments.length;
+    const segmentAngle = (2 * Math.PI) / segments;
+
+    // Рисуем сегменты
+    damageSegments.forEach((seg, i) => {
+      const startAngle = i * segmentAngle - Math.PI / 2;
+      const endAngle = startAngle + segmentAngle;
+
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+      ctx.closePath();
+
+      ctx.fillStyle = seg.color;
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Текст урона (с правильной ориентацией)
+      const midAngle = startAngle + segmentAngle / 2;
+      const textX = centerX + Math.cos(midAngle) * (radius * 0.6);
+      const textY = centerY + Math.sin(midAngle) * (radius * 0.6);
+
+      ctx.save();
+      ctx.translate(textX, textY);
+      const textRotation = midAngle + Math.PI / 2;
+      ctx.rotate(textRotation);
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 20px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#000';
+      ctx.shadowBlur = 4;
+      ctx.fillText(`-${seg.damage}`, 0, -8);
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(seg.label, 0, 8);
+      ctx.restore();
+    });
+
+    // Центральный круг
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, 30, 0, 2 * Math.PI);
+    ctx.fillStyle = '#333';
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = '20px serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('💀', centerX, centerY);
+  }, [animatronicsAtDoors]);
 
   // Спин колеса
   const spinWheel = useCallback((segments: number, onResult: (index: number) => void) => {
@@ -333,23 +439,29 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
   }, [spinWheel]);
 
   // Расчёт шанса выживания
+  // Батарея используется как модификатор сложности
   const calculateSurvivalChance = useCallback(() => {
     if (!batteryLevel) return 0;
 
-    // Базовый шанс от батареи (100% батареи = 80% шанс)
-    let chance = batteryLevel * 0.8;
+    // Базовый шанс 50%
+    let baseChance = 50;
 
-    // Каждый аниматроник снижает шанс
-    animatronicsAtDoors.forEach(a => {
-      chance -= a.aiLevel * 2; // aiLevel влияет на снижение шанса
-    });
+    // Каждый аниматроник снижает шанс (10-20 на каждого в зависимости от aiLevel)
+    const animatronicPenalty = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 4, 0);
 
-    // Время влияет (позже = сложнее)
-    if (currentHour) {
-      chance -= (currentHour - 1) * 5;
-    }
+    // Время влияет (позже = сложнее, 0-25% штраф)
+    const timePenalty = currentHour ? (currentHour - 1) * 5 : 0;
 
-    return Math.max(5, Math.min(95, chance)); // 5-95%
+    // БАТАРЕЯ КАК МОДИФИКАТОР СЛОЖНОСТИ
+    // Высокий заряд = бонус к шансу, низкий заряд = штраф
+    // 100% батареи = +40% к шансу
+    // 50% батареи = +0% (нейтрально)
+    // 10% батареи = -32% к шансу
+    const batteryModifier = (batteryLevel - 50) * 0.8;
+
+    const finalChance = baseChance - animatronicPenalty - timePenalty + batteryModifier;
+
+    return Math.max(5, Math.min(95, finalChance)); // 5-95%
   }, [batteryLevel, animatronicsAtDoors, currentHour]);
 
   // Проверка выживания
@@ -370,32 +482,60 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       // Не выжил - колесо урона
       setTimeout(() => {
         setPhase('damage_wheel');
+        setWheelRotation(0); // Сброс вращения для нового колеса
+        setTimeout(() => drawDamageWheel(), 100);
       }, 2000);
     }
 
     return survived;
-  }, [calculateSurvivalChance, currentHour]);
+  }, [calculateSurvivalChance, currentHour, drawDamageWheel]);
+
+  // Построение массива сегментов урона (для расчёта результата спина)
+  const getDamageSegments = useCallback(() => {
+    if (animatronicsAtDoors.length === 0) {
+      return [{ damage: 10, color: '#EF4444', label: 'МИН' }];
+    }
+
+    const segments: { damage: number; color: string; label: string }[] = [];
+
+    // Сегменты для каждого аниматроника
+    animatronicsAtDoors.forEach(a => {
+      const baseDamage = a.aiLevel * 5;
+      segments.push({ damage: baseDamage, color: a.color, label: a.name });
+      segments.push({ damage: baseDamage + 5, color: a.color, label: a.name });
+    });
+
+    // Комбинированные сегменты
+    if (animatronicsAtDoors.length > 1) {
+      const combinedDamage = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 5, 0);
+      segments.push({ damage: combinedDamage, color: '#DC2626', label: 'ВСЕ!' });
+      segments.push({ damage: Math.round(combinedDamage * 1.5), color: '#7F1D1D', label: 'КРИТ!' });
+    }
+
+    return segments;
+  }, [animatronicsAtDoors]);
 
   // Колесо урона (комбинированное от аниматроников у дверей)
   const spinDamageWheel = useCallback(() => {
-    // Суммарный урон от всех аниматроников (10-40 за каждого)
-    const totalPossibleDamage = animatronicsAtDoors.length * 40;
-    const minDamage = Math.max(10, animatronicsAtDoors.length * 10);
-    const damage = Math.floor(Math.random() * (totalPossibleDamage - minDamage + 1)) + minDamage;
+    const damageSegments = getDamageSegments();
 
-    setCurrentWheelValue(damage);
-    setTotalDamage(prev => prev + damage);
+    spinWheel(damageSegments.length, (index) => {
+      const damage = damageSegments[index].damage;
+      setCurrentWheelValue(damage);
+      setTotalDamage(prev => prev + damage);
 
-    setTimeout(() => {
-      // Перезапуск механики
-      setPhase('time_wheel');
-      setCurrentHour(null);
-      setBatteryLevel(null);
-      setAnimatronicsAtDoors([]);
-      setWheelRotation(0);
-      setTimeout(() => drawTimeWheel(), 100);
-    }, 3000);
-  }, [animatronicsAtDoors, drawTimeWheel]);
+      setTimeout(() => {
+        // Перезапуск механики
+        setPhase('time_wheel');
+        setCurrentHour(null);
+        setBatteryLevel(null);
+        setAnimatronicsAtDoors([]);
+        setWheelRotation(0);
+        setCurrentWheelValue(null);
+        setTimeout(() => drawTimeWheel(), 100);
+      }, 3000);
+    });
+  }, [getDamageSegments, spinWheel, drawTimeWheel]);
 
   // Продолжение после выживания
   const continueOffice = useCallback(() => {
@@ -614,19 +754,26 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
             <div className="bg-black/50 p-6 rounded-xl border border-white/20 mb-6">
               <div className="grid grid-cols-2 gap-4 text-left mb-4">
                 <div className="text-white/50">Время:</div>
-                <div className="text-blue-400 font-bold">{currentHour} AM</div>
+                <div className="text-blue-400 font-bold">{currentHour} AM <span className="text-red-400 text-sm">(-{(currentHour || 1) - 1 > 0 ? ((currentHour || 1) - 1) * 5 : 0}%)</span></div>
 
-                <div className="text-white/50">Батарея:</div>
-                <div className="text-green-400 font-bold">{batteryLevel}%</div>
+                <div className="text-white/50">Батарея (модиф.):</div>
+                <div className={`font-bold ${(batteryLevel || 0) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
+                  {batteryLevel}% <span className="text-sm">({(batteryLevel || 0) >= 50 ? '+' : ''}{Math.round(((batteryLevel || 0) - 50) * 0.8)}%)</span>
+                </div>
 
                 <div className="text-white/50">Аниматроники:</div>
-                <div className="text-red-400 font-bold">{animatronicsAtDoors.length}</div>
+                <div className="text-red-400 font-bold">
+                  {animatronicsAtDoors.length} <span className="text-sm">(-{animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 4, 0)}%)</span>
+                </div>
               </div>
 
               <div className="border-t border-white/20 pt-4">
                 <div className="text-white/50 mb-2">Шанс выживания:</div>
                 <div className="text-3xl font-bold text-yellow-400">
                   {Math.round(calculateSurvivalChance())}%
+                </div>
+                <div className="text-xs text-white/30 mt-1">
+                  База 50% + модификаторы
                 </div>
               </div>
             </div>
@@ -650,14 +797,32 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
               {animatronicsAtDoors.map(a => a.name).join(', ')} атакуют!
             </p>
 
-            {currentWheelValue === null ? (
+            {/* Колесо урона */}
+            <div className="relative mb-6">
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-2 z-20">
+                <div className="w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-white" />
+              </div>
+
+              <div
+                style={{
+                  transform: `rotate(${wheelRotation}deg)`,
+                  transition: isSpinning ? 'transform 4s cubic-bezier(0.15, 0.7, 0.1, 1)' : 'none'
+                }}
+              >
+                <canvas ref={canvasRef} width={350} height={350} />
+              </div>
+            </div>
+
+            {!isSpinning && currentWheelValue === null && (
               <button
                 onClick={spinDamageWheel}
                 className="px-8 py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all hover:scale-105 animate-pulse"
               >
-                💀 ПОЛУЧИТЬ УРОН
+                💀 КРУТИТЬ КОЛЕСО УРОНА
               </button>
-            ) : (
+            )}
+
+            {currentWheelValue !== null && (
               <div className="animate-bounce">
                 <div className="text-6xl font-bold text-red-500 mb-2">-{currentWheelValue}</div>
                 <div className="text-white/50">Урон получен! Перезапуск смены...</div>

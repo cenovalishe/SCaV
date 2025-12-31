@@ -111,6 +111,9 @@ export default function GameBoard() {
   // ★ Состояние механики офиса (маршрутная точка Y)
   const [officeMechanic, setOfficeMechanic] = useState<{ active: boolean } | null>(null);
 
+  // ★ Состояние попапа блокировки S/F
+  const [sfBlockedPopup, setSfBlockedPopup] = useState<{ active: boolean; message: string } | null>(null);
+
   // Функция добавления записи в лог (полная история)
   const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
     setGameLog(prev => [...prev, {
@@ -327,7 +330,16 @@ export default function GameBoard() {
           setOfficeMechanic({ active: true });
         }
       } else {
-        addLogEntry(res.message || 'Ошибка перемещения', 'system');
+        // ★ Проверяем, не заблокирован ли S/F
+        if (res.message?.includes('заблокирован') || res.message?.includes('Вход')) {
+          setSfBlockedPopup({ active: true, message: res.message });
+          // Возвращаем выносливость, которую списали перед попыткой
+          if (!skipStaminaCost) {
+            await updateStamina(GAME_ID, playerId, staminaCost);
+          }
+        } else {
+          addLogEntry(res.message || 'Ошибка перемещения', 'system');
+        }
       }
     } catch (error) {
       console.error("Ошибка при перемещении:", error);
@@ -629,6 +641,30 @@ export default function GameBoard() {
           onComplete={handleOfficeMechanicComplete}
           onClose={() => setOfficeMechanic(null)}
         />
+      )}
+
+      {/* ★ Попап блокировки S/F */}
+      {sfBlockedPopup?.active && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
+          <div className="bg-gradient-to-br from-red-950 to-zinc-900 border-2 border-red-500/50 rounded-xl p-8 max-w-md text-center animate-pulse">
+            <div className="text-6xl mb-4">🔒</div>
+            <h2 className="text-2xl font-bold text-red-400 mb-4 font-mono">
+              ДОСТУП ЗАБЛОКИРОВАН
+            </h2>
+            <p className="text-white/70 mb-6">
+              Для входа на точку S/F необходима <span className="text-yellow-400 font-bold">ключ-карта</span>.
+            </p>
+            <p className="text-white/50 text-sm mb-6">
+              Ключ-карту можно получить, успешно пройдя ночную смену в <span className="text-purple-400">Офисе (Y)</span>.
+            </p>
+            <button
+              onClick={() => setSfBlockedPopup(null)}
+              className="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition-all hover:scale-105"
+            >
+              Понятно
+            </button>
+          </div>
+        </div>
       )}
 
       {/* Основной контент */}

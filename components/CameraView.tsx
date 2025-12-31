@@ -302,6 +302,35 @@ export default function CameraView({
             </span>
           </div>
         </div>
+
+        {/* ★ Инфо для специальных локаций */}
+        {displayNode?.id === 'SF' && (
+          <div className="mt-3 bg-gradient-to-r from-yellow-900/80 to-orange-900/60 border border-yellow-500/50 rounded-lg p-3 backdrop-blur-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">🔐</span>
+              <span className="font-mono text-yellow-400 text-sm font-bold uppercase tracking-wider">
+                ТРЕБУЕТСЯ КЛЮЧ-КАРТА
+              </span>
+            </div>
+            <div className="font-mono text-white/60 text-xs leading-relaxed">
+              Для повторного входа необходима ключ-карта из <span className="text-purple-400">Офиса (Y)</span>
+            </div>
+          </div>
+        )}
+
+        {displayNode?.id === 'Y' && (
+          <div className="mt-3 bg-gradient-to-r from-purple-900/80 to-indigo-900/60 border border-purple-500/50 rounded-lg p-3 backdrop-blur-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xl">🏢</span>
+              <span className="font-mono text-purple-400 text-sm font-bold uppercase tracking-wider">
+                ОФИС ОХРАННИКА
+              </span>
+            </div>
+            <div className="font-mono text-white/60 text-xs leading-relaxed">
+              Пройдите ночную смену, чтобы получить <span className="text-yellow-400">ключ-карту</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Футер камеры */}
