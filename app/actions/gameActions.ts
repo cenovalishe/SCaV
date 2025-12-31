@@ -123,7 +123,7 @@ export async function movePlayer(
       return { success: false, message: "Movement blocked: No direct path!" };
     }
 
-    // Проверка взаимоисключающих путей X-1 и X-2
+    // Проверка взаимоисключающих путей
     if (currentNodeId === 'X') {
       const chosenBranch = playerData?.chosenBranch;
       if (chosenBranch === '1' && targetNodeId === '2') {
@@ -148,24 +148,25 @@ export async function movePlayer(
     const visitedNodes = playerData?.visitedNodes || [];
     const updatedVisitedNodes = [...visitedNodes, currentNodeId];
 
-    let status = "IDLE";
-
+    // 1. Сначала перемещаем игрока и сбрасываем боевые статусы
     await playerRef.update({
       currentNode: targetNodeId,
-      status: status,
+      status: "IDLE", // Сбрасываем статус, проверка боя будет позже
+      currentEnemyId: null, // Сбрасываем текущего врага
       chosenBranch: newChosenBranch,
       hasReachedY: hasReachedY,
       visitedNodes: updatedVisitedNodes,
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    // AI движение аниматроников
+    // 2. Двигаем аниматроников (AI Movement)
     const gameRef = dbAdmin.collection('games').doc(gameId);
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
     const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
       const enemyData = enemyDoc.data();
+      // Шанс передвижения врага (можно настроить)
       if (Math.random() > 0.6) {
         const enemyNode = MAP_NODES_DATA.find(n => n.id === enemyData.currentNode);
         if (enemyNode && enemyNode.neighbors.length > 0) {
@@ -176,37 +177,46 @@ export async function movePlayer(
       return Promise.resolve();
     });
 
+    // Ждем, пока все враги походят
     await Promise.all(enemyMoves);
+
+    // 3. ФИНАЛЬНАЯ ПРОВЕРКА: Кто теперь в одной клетке с игроком?
+    // Получаем обновленные данные врагов после их хода
+    const updatedEnemiesSnap = await enemiesRef.get();
+    
+    // Фильтруем врагов, которые находятся в той же ноде, куда пришел игрок
+    const enemiesInNode = updatedEnemiesSnap.docs
+      .map(doc => ({ id: doc.id, ...doc.data() } as any))
+      .filter(e => e.currentNode === targetNodeId && e.hp > 0);
+
+    let finalStatus = "IDLE";
+    let message = `Moved to ${targetNodeId}`;
+    let enemyId = null;
+
+    if (enemiesInNode.length > 0) {
+      finalStatus = "IN_COMBAT";
+      
+      // Случайный выбор врага из присутствующих
+      const randomEnemy = enemiesInNode[Math.floor(Math.random() * enemiesInNode.length)];
+      enemyId = randomEnemy.id;
+      message = `Encountered ${randomEnemy.name || 'Enemy'}!`;
+
+      // Обновляем статус игрока на боевой и записываем ID врага
+      await playerRef.update({
+        status: "IN_COMBAT",
+        currentEnemyId: enemyId
+      });
+    }
 
     revalidatePath('/');
     return {
       success: true,
-      message: `Moved to ${targetNodeId}`,
-      event: status === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR"
+      message: message,
+      event: finalStatus === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR"
     };
   } catch (e) {
     console.error(e);
-    return { success: false, message: "Error" };
-  }
-}
-
-export async function getOrCreatePlayer(gameId: string, savedPlayerId: string | null) {
-  if (!dbAdmin) {
-    return { success: false, message: 'Firebase not configured' };
-  }
-
-  try {
-    const playersRef = dbAdmin.collection('games').doc(gameId).collection('players');
-
-    if (savedPlayerId) {
-      const doc = await playersRef.doc(savedPlayerId).get();
-      if (doc.exists) return { success: true, playerId: savedPlayerId };
-    }
-
-    return { success: false, needsSlotSelection: true };
-  } catch (e) {
-    console.error(e);
-    return { success: false, message: "Failed to check player" };
+    return { success: false, message: "Error in movePlayer" };
   }
 }
 
