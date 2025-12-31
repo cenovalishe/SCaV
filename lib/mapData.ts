@@ -317,11 +317,11 @@ export interface AnimatronicSpawnData {
 
 export const ANIMATRONIC_SPAWNS: AnimatronicSpawnData[] = [
   { id: 'foxy', nameRu: 'Фокси', nameEn: 'Foxy', color: '#EF4444',
-    allowedNodes: ['D', '8', 'G', '6', 'V'] },
+    allowedNodes: ['8', 'D', 'G', '6', 'V'] },
   { id: 'bonnie', nameRu: 'Бонни', nameEn: 'Bonnie', color: '#3B82F6',
-    allowedNodes: ['1', 'X', 'D', '9', 'G', '6', 'V'] },
+    allowedNodes: ['7', '1', 'X', 'D', '9', 'G', '6', 'V'] },
   { id: 'chica', nameRu: 'Чика', nameEn: 'Chica', color: '#EAB308',
-    allowedNodes: ['1', 'X', '2', '3', '4', '5', 'A', 'B'] },
+    allowedNodes: ['4', '1', 'X', '2', '3', '5', 'A', 'B'] },
   { id: 'freddy', nameRu: 'Фредди', nameEn: 'Freddy', color: '#92400E',
     allowedNodes: ['1', '9', '3', '4', 'B', '7', '2'] }
 ];

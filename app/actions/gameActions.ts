@@ -235,7 +235,12 @@ export async function movePlayer(
     return {
       success: true,
       message: message,
-      event: finalStatus === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR"
+      event: finalStatus === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR",
+      collision: enemiesInNode.length > 0 ? {
+        hasCollision: true,
+        enemyId: enemyId,
+        enemyType: enemiesInNode[0]?.type || enemiesInNode[0]?.id
+      } : undefined
     };
   } catch (e) {
     console.error(e);
