@@ -109,10 +109,9 @@ export default function LootRoulette({
   const startSpin = useCallback(() => {
     setPhase('spinning');
 
-    // Целевой offset чтобы выигрышные предметы были под стрелками
-    // Левая стрелка над WINNING_INDEX_1, правая стрелка над WINNING_INDEX_2
-    // Центрируем на WINNING_INDEX_1 (он будет точно под первой стрелкой)
-    const targetOffset = (WINNING_INDEX_1 - Math.floor(VISIBLE_ITEMS / 2)) * ITEM_WIDTH;
+    // Целевой offset: центр первого выигрышного предмета должен быть точно на 50%
+    // Центр предмета = (индекс + 0.5) * ширина предмета
+    const targetOffset = (WINNING_INDEX_1 + 0.5) * ITEM_WIDTH;
 
     // Анимация
     let startTime: number;
@@ -219,7 +218,7 @@ export default function LootRoulette({
               ref={containerRef}
               className="flex items-center h-full transition-none"
               style={{
-                transform: `translateX(calc(50% - ${offset}px - ${ITEM_WIDTH / 2}px - ${ITEM_WIDTH}px))`
+                transform: `translateX(calc(50% - ${offset}px))`
               }}
             >
               {rouletteItems.map((item, idx) => {
