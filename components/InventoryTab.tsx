@@ -270,7 +270,8 @@ export default function InventoryTab({
   }, []);
 
   // ════════════════════════════════════════════════════════════════════════
-  // FIX: Исправленная функция Drop с поддержкой спец-слотов и защитой от дюпа
+  // FIX: Исправленная функция Drop с поддержкой спец-слотов, защитой от дюпа
+  // и обменом предметами при перемещении на занятую ячейку
   // ════════════════════════════════════════════════════════════════════════
   const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
     e.preventDefault();
@@ -281,21 +282,39 @@ export default function InventoryTab({
 
     const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
 
-    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
+    // --- 0. ПОЛУЧАЕМ ПРЕДМЕТ В ЦЕЛЕВОЙ ЯЧЕЙКЕ (для обмена) ---
+    let targetItemId: string | null = null;
+
+    if (['rig', 'bag', 'backpack'].includes(target)) {
+      const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
+      if (container && index !== undefined) {
+        targetItemId = container.items[index] || null;
+      }
+    } else if (target.startsWith('pocket')) {
+      const pocketIndex = parseInt(target.replace('pocket', ''));
+      targetItemId = newEquipment.pockets[pocketIndex] || null;
+    } else if (target.startsWith('special')) {
+      const idx = parseInt(target.replace('special', ''));
+      targetItemId = newEquipment.specials?.[idx] || null;
+    } else {
+      targetItemId = (newEquipment as any)[target] || null;
+    }
+
+    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА (и размещение предмета из цели, если был) ---
     if (dragSource.type === 'container' && dragSource.containerType) {
       const container = newEquipment[dragSource.containerType];
       if (container && dragSource.index !== undefined) {
-        container.items[dragSource.index] = null;
+        container.items[dragSource.index] = targetItemId; // Обмен: кладём предмет из цели
       }
     } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
-      newEquipment.pockets[dragSource.index] = null;
+      newEquipment.pockets[dragSource.index] = targetItemId; // Обмен
     } else if (dragSource.type === 'equipment' && dragSource.slot) {
       // FIX: Проверяем, является ли слот специальным
       if (dragSource.slot.startsWith('special')) {
         const idx = parseInt(dragSource.slot.replace('special', ''));
-        if (newEquipment.specials) newEquipment.specials[idx] = null;
+        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId; // Обмен
       } else {
-        (newEquipment as any)[dragSource.slot] = null;
+        (newEquipment as any)[dragSource.slot] = targetItemId; // Обмен
       }
     }
 

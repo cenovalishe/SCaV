@@ -247,9 +247,9 @@ export default function InfoTab({
             Лог игры
           </span>
         </div>
-        <div className="h-28 overflow-y-auto bg-black/50 border border-white/10 rounded-lg p-2 space-y-1 custom-scrollbar">
+        <div className="max-h-40 overflow-y-auto bg-black/50 border border-white/10 rounded-lg p-2 space-y-1 custom-scrollbar">
           {gameLog.length > 0 ? (
-            gameLog.slice(-10).reverse().map((entry, idx) => (
+            [...gameLog].reverse().map((entry, idx) => (
               <div
                 key={idx}
                 className={`flex items-start gap-2 text-xs font-mono p-1.5 rounded ${

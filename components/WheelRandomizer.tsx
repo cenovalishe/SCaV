@@ -89,7 +89,10 @@ function getAngleForValue(value: number): number {
   const segments = getWheelSegments();
   const segment = segments.find(s => s.value === value);
   if (!segment) return 0;
-  return (segment.startAngle + segment.endAngle) / 2;
+  // Центр сегмента - стрелка указывает вверх (на 0 градусов)
+  // Сегменты рисуются со смещением -90 градусов, поэтому корректируем
+  const centerAngle = (segment.startAngle + segment.endAngle) / 2;
+  return centerAngle;
 }
 
 const RESPIN_DAMAGE = 5;
@@ -241,7 +244,11 @@ export default function WheelRandomizer({
 
     const targetAngle = getAngleForValue(result);
     const spins = 6 + Math.floor(Math.random() * 4);
-    const finalRotation = spins * 360 + (360 - targetAngle);
+    // Корректировка: колесо вращается по часовой стрелке, стрелка сверху
+    // Чтобы сегмент оказался под стрелкой, нужно повернуть колесо так,
+    // чтобы центр сегмента оказался на 0 градусов (вверху)
+    // Сегменты рисуются начиная сверху (смещение -90° уже в отрисовке)
+    const finalRotation = spins * 360 + targetAngle;
 
     setRotation(prev => prev + finalRotation);
   }, [isSpinning]);

@@ -94,11 +94,14 @@ export type PlayerState = {
   inventory: string[];
 };
 
+// [PATCH] Удален параметр hp у аниматроников
 export type EnemyState = {
   id: string;
   currentNode: string;
   type: string;
-  hp: number;
+  hp: number;      // <--- ОБЯЗАТЕЛЬНО: Это поле должно быть здесь
+  maxHp?: number;  // Рекомендуется добавить (так как оно есть в базе)
+  damage?: number; // Рекомендуется добавить
 };
 
 // /END_ANCHOR:USEGAME/TYPES

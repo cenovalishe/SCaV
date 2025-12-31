@@ -17,6 +17,7 @@
  * /START_ANCHOR:GAMEACTIONS/STAMINA ........... Функции updateStamina(), applyDamage()
  * /START_ANCHOR:GAMEACTIONS/LOOT .............. Функция lootLocation()
  * /START_ANCHOR:GAMEACTIONS/TURNS ............. Функции checkAllPlayersExhausted(), startNewTurnForAll()
+ * /START_ANCHOR:GAMEACTIONS/RESPAWN ........... Автоматический респавн аниматроников
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * EXPORTS OVERVIEW:
@@ -32,6 +33,7 @@
  *   lootLocation(gameId, playerId)             → { success, items }
  *   checkAllPlayersExhausted(gameId)           → { allExhausted }
  *   startNewTurnForAll(gameId)                 → { success, playerResults }
+ *   respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
@@ -46,7 +48,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { dbAdmin } from '@/lib/firebaseAdmin';
-import { MAP_NODES_DATA } from '@/lib/mapData';
+import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
 
@@ -58,11 +60,17 @@ import { FieldValue } from 'firebase-admin/firestore';
 // КОНТРАКТ: success=true означает успешное выполнение операции
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// [PATCH] Добавлено поле collision для обработки столкновений с врагами
 type MoveResponse = {
   success: boolean;
   message: string;
   event?: string;
   loot?: string;
+  collision?: {
+    hasCollision: boolean;
+    enemyId?: string;
+    enemyType?: string;
+  };
 };
 
 // /END_ANCHOR:GAMEACTIONS/TYPES
@@ -159,19 +167,33 @@ export async function movePlayer(
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    // 2. Двигаем аниматроников (AI Movement)
+    // 2. Двигаем аниматроников (AI Movement) с учётом допустимых зон
     const gameRef = dbAdmin.collection('games').doc(gameId);
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
     const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
       const enemyData = enemyDoc.data();
+      const enemyId = enemyDoc.id as AnimatronicType;
+
       // Шанс передвижения врага (можно настроить)
       if (Math.random() > 0.6) {
         const enemyNode = MAP_NODES_DATA.find(n => n.id === enemyData.currentNode);
         if (enemyNode && enemyNode.neighbors.length > 0) {
-          const nextNode = enemyNode.neighbors[Math.floor(Math.random() * enemyNode.neighbors.length)];
-          return enemyDoc.ref.update({ currentNode: nextNode });
+          // Получаем допустимые ноды для данного аниматроника
+          const animatronicData = ANIMATRONIC_SPAWNS.find(a => a.id === enemyId);
+          const allowedNodes = animatronicData?.allowedNodes || [];
+
+          // Фильтруем соседей - только те, которые в допустимой зоне
+          const validNeighbors = enemyNode.neighbors.filter(neighborId =>
+            allowedNodes.includes(neighborId)
+          );
+
+          // Если есть допустимые соседи, двигаемся в случайного из них
+          if (validNeighbors.length > 0) {
+            const nextNode = validNeighbors[Math.floor(Math.random() * validNeighbors.length)];
+            return enemyDoc.ref.update({ currentNode: nextNode });
+          }
         }
       }
       return Promise.resolve();
@@ -185,9 +207,10 @@ export async function movePlayer(
     const updatedEnemiesSnap = await enemiesRef.get();
     
     // Фильтруем врагов, которые находятся в той же ноде, куда пришел игрок
+    // [PATCH] Удалена проверка hp у аниматроников
     const enemiesInNode = updatedEnemiesSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() } as any))
-      .filter(e => e.currentNode === targetNodeId && e.hp > 0);
+      .filter(e => e.currentNode === targetNodeId);
 
     let finalStatus = "IDLE";
     let message = `Moved to ${targetNodeId}`;
@@ -267,9 +290,15 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         san: 100,
         stamina: 7,
         maxStamina: 7,
-        stealth: 0,
+        stealth: 0,      // Скрытность: 0
+        attack: 1,       // Атака: 1
+        defense: 1,      // Защита: 1
+        speed: 1,        // Скорость: 1
+        luck: 0,         // Удача: 0
+        capacity: 20,    // Вместимость
+        maxHp: 100,      // Максимальное ХП
       },
-      inventory: ["flashlight"],
+      inventory: [],     // Пустой инвентарь
       chosenBranch: null,
       hasReachedY: false,
       visitedNodes: []
@@ -561,3 +590,68 @@ export async function newTurn(gameId: string, playerId: string) {
 }
 
 // /END_ANCHOR:GAMEACTIONS/TURNS
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:GAMEACTIONS/RESPAWN
+// [PATCH] Автоматический респавн аниматроников
+// КОНТРАКТ: Создает врагов если коллекция enemies пуста
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function respawnEnemiesIfNeeded(gameId: string) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
+    const enemiesSnap = await enemiesRef.get();
+
+    // Если враги уже есть - ничего не делаем
+    if (!enemiesSnap.empty) {
+      return { success: true, spawned: false, message: 'Enemies already exist' };
+    }
+
+    // Создаем врагов используя данные из ANIMATRONIC_SPAWNS
+    const batch = dbAdmin.batch();
+
+    for (const animatronic of ANIMATRONIC_SPAWNS) {
+      const docRef = enemiesRef.doc(animatronic.id);
+      batch.set(docRef, {
+        id: animatronic.id,
+        type: animatronic.id,       // ИСПРАВЛЕНО: используем id (или nameEn) вместо name
+        name: animatronic.nameRu,   // ДОБАВЛЕНО: поле name обязательно для AnimatronicState
+        currentNode: animatronic.allowedNodes[0], // ИСПРАВЛЕНО: startNode нет, берем первый разрешенный узел
+        hp: 100,                    // ДОБАВЛЕНО: обязательные поля для AnimatronicState
+        maxHp: 100,
+        damage: 10,
+        moveChance: 50,
+        aggressionLevel: 1,
+        color: animatronic.color    // В mapData свойство color уже есть, функция не нужна
+      });
+    }
+
+    await batch.commit();
+
+    return {
+      success: true,
+      spawned: true,
+      message: `Spawned ${ANIMATRONIC_SPAWNS.length} enemies`
+    };
+  } catch (e) {
+    console.error(e);
+    return { success: false, message: 'Failed to respawn enemies' };
+  }
+}
+
+// Вспомогательная функция для получения цвета аниматроника
+function getAnimatronicColor(id: string): string {
+  const colors: Record<string, string> = {
+    'freddy': '🟤',
+    'bonnie': '🔵',
+    'chica': '🟡',
+    'foxy': '🔴'
+  };
+  return colors[id] || '⚪';
+}
+
+// /END_ANCHOR:GAMEACTIONS/RESPAWN
