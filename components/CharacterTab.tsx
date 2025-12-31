@@ -19,11 +19,13 @@
 
 'use client'
 
-import { CharacterStats } from '@/lib/types';
+import { CharacterStats, Equipment } from '@/lib/types';
+import { calculateEffectiveStats } from '@/lib/itemData';
 
 interface CharacterTabProps {
   stats: CharacterStats;
   playerName: string;
+  equipment?: Equipment;
 }
 
 // Названия характеристик с иконками
@@ -52,9 +54,22 @@ function getStatColor(value: number): string {
   return 'text-red-400';
 }
 
-export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
-  const hpPercent = (stats.hp / stats.maxHp) * 100;
-  const staminaPercent = (stats.stamina / stats.maxStamina) * 100;
+export default function CharacterTab({ stats, playerName, equipment }: CharacterTabProps) {
+  // Расчёт эффективных статов с учётом экипировки
+  const defaultEquipment: Equipment = {
+    helmet: null, armor: null, clothes: null,
+    pockets: [null, null, null, null],
+    specials: [null, null, null],
+    weapon: null, scope: null, tactical: null, suppressor: null,
+    rig: null, bag: null, backpack: null
+  };
+
+  const { stats: effectiveStats, modifiers } = equipment
+    ? calculateEffectiveStats(stats, equipment)
+    : { stats, modifiers: {} as Partial<CharacterStats> };
+
+  const hpPercent = (effectiveStats.hp / effectiveStats.maxHp) * 100;
+  const staminaPercent = (effectiveStats.stamina / effectiveStats.maxStamina) * 100;
 
   return (
     <div className="h-full flex p-2 gap-3">
@@ -151,7 +166,9 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
         <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar">
           {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as const).map((statKey) => {
             const label = STAT_LABELS[statKey];
-            const value = stats[statKey];
+            const baseValue = stats[statKey];
+            const effectiveValue = effectiveStats[statKey];
+            const modifier = modifiers[statKey] || 0;
 
             return (
               <div
@@ -166,17 +183,37 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
                 </div>
                 {/* Визуальный индикатор */}
                 <div className="flex gap-0.5">
-                  {Array(10).fill(0).map((_, i) => (
-                    <div
-                      key={i}
-                      className={`w-1.5 h-3 rounded-sm transition-all ${
-                        i < value ? 'bg-gradient-to-t from-white/60 to-white/30' : 'bg-zinc-700/50'
-                      }`}
-                    />
-                  ))}
+                  {Array(10).fill(0).map((_, i) => {
+                    // Показываем базовые значения и бонусы разными цветами
+                    const isBase = i < baseValue;
+                    const isBonus = i >= baseValue && i < effectiveValue;
+                    const isMalus = i < baseValue && i >= effectiveValue;
+
+                    return (
+                      <div
+                        key={i}
+                        className={`w-1.5 h-3 rounded-sm transition-all ${
+                          isBonus
+                            ? 'bg-gradient-to-t from-green-500/80 to-green-400/60'
+                            : isMalus
+                              ? 'bg-gradient-to-t from-red-600/50 to-red-500/30'
+                              : isBase
+                                ? 'bg-gradient-to-t from-white/60 to-white/30'
+                                : 'bg-zinc-700/50'
+                        }`}
+                      />
+                    );
+                  })}
                 </div>
-                <div className={`font-mono font-bold text-lg w-6 text-right ${getStatColor(value)}`}>
-                  {value}
+                <div className="flex items-center gap-1">
+                  <span className={`font-mono font-bold text-lg w-6 text-right ${getStatColor(effectiveValue)}`}>
+                    {effectiveValue}
+                  </span>
+                  {modifier !== 0 && (
+                    <span className={`font-mono text-xs ${modifier > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      {modifier > 0 ? `+${modifier}` : modifier}
+                    </span>
+                  )}
                 </div>
               </div>
             );

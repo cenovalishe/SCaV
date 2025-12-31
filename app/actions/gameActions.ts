@@ -167,7 +167,7 @@ export async function movePlayer(
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    // 2. Двигаем аниматроников (AI Movement) с учётом допустимых зон
+    // 2. Двигаем аниматроников (AI Movement) с FNAF1-style AI level
     const gameRef = dbAdmin.collection('games').doc(gameId);
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
@@ -176,13 +176,19 @@ export async function movePlayer(
       const enemyData = enemyDoc.data();
       const enemyId = enemyDoc.id as AnimatronicType;
 
-      // Шанс передвижения врага (можно настроить)
-      if (Math.random() > 0.6) {
+      // Получаем данные аниматроника
+      const animatronicData = ANIMATRONIC_SPAWNS.find(a => a.id === enemyId);
+      if (!animatronicData) return Promise.resolve();
+
+      // FNAF1-style AI: random(1-20), если меньше aiLevel - двигаемся
+      // aiLevel от 0 (никогда не двигается) до 20 (всегда двигается)
+      const aiLevel = enemyData.aiLevel ?? animatronicData.aiLevel ?? 10;
+      const aiRoll = Math.floor(Math.random() * 20) + 1; // 1-20
+
+      if (aiRoll <= aiLevel) {
         const enemyNode = MAP_NODES_DATA.find(n => n.id === enemyData.currentNode);
         if (enemyNode && enemyNode.neighbors.length > 0) {
-          // Получаем допустимые ноды для данного аниматроника
-          const animatronicData = ANIMATRONIC_SPAWNS.find(a => a.id === enemyId);
-          const allowedNodes = animatronicData?.allowedNodes || [];
+          const allowedNodes = animatronicData.allowedNodes || [];
 
           // Фильтруем соседей - только те, которые в допустимой зоне
           const validNeighbors = enemyNode.neighbors.filter(neighborId =>
@@ -433,7 +439,13 @@ export async function lootLocation(gameId: string, playerId: string) {
     const playerData = playerSnap.data();
     const currentNode = playerData?.currentNode;
     const currentStamina = playerData?.stats?.stamina || 0;
-    const inventory = playerData?.inventory || [];
+    const equipment = playerData?.equipment || {
+      pockets: [null, null, null, null],
+      specials: [null, null, null],
+      rig: null,
+      bag: null,
+      backpack: null
+    };
 
     if (currentStamina < 1) {
       return { success: false, message: 'Недостаточно выносливости!', items: [] };
@@ -455,20 +467,114 @@ export async function lootLocation(gameId: string, playerId: string) {
       }
     }
 
-    const newInventory = [...inventory, ...foundItems];
+    // Если ничего не найдено - просто тратим выносливость
+    if (foundItems.length === 0) {
+      await playerRef.update({
+        'stats.stamina': currentStamina - 1,
+        lastUpdated: FieldValue.serverTimestamp()
+      });
+      revalidatePath('/');
+      return { success: true, message: 'Ничего не найдено', items: [], newStamina: currentStamina - 1 };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // ПРИОРИТЕТ РАЗМЕЩЕНИЯ ЛУТА:
+    // 1. Карманы (4 слота) - по умолчанию
+    // 2. Разгрузка (если есть)
+    // 3. Сумка (если есть)
+    // 4. Рюкзак (если есть)
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    const placedItems: string[] = [];
+    const droppedItems: string[] = [];
+
+    // Копируем экипировку для модификации
+    const newEquipment = JSON.parse(JSON.stringify(equipment));
+
+    // Инициализируем карманы если их нет
+    if (!newEquipment.pockets) {
+      newEquipment.pockets = [null, null, null, null];
+    }
+
+    for (const itemId of foundItems) {
+      let placed = false;
+
+      // 1. Пытаемся положить в карманы (приоритет)
+      for (let i = 0; i < newEquipment.pockets.length; i++) {
+        if (newEquipment.pockets[i] === null) {
+          newEquipment.pockets[i] = itemId;
+          placedItems.push(itemId);
+          placed = true;
+          break;
+        }
+      }
+
+      // 2. Если карманы полные - пробуем разгрузку
+      if (!placed && newEquipment.rig?.items) {
+        for (let i = 0; i < newEquipment.rig.items.length; i++) {
+          if (newEquipment.rig.items[i] === null) {
+            newEquipment.rig.items[i] = itemId;
+            placedItems.push(itemId);
+            placed = true;
+            break;
+          }
+        }
+      }
+
+      // 3. Если разгрузка полная - пробуем сумку
+      if (!placed && newEquipment.bag?.items) {
+        for (let i = 0; i < newEquipment.bag.items.length; i++) {
+          if (newEquipment.bag.items[i] === null) {
+            newEquipment.bag.items[i] = itemId;
+            placedItems.push(itemId);
+            placed = true;
+            break;
+          }
+        }
+      }
+
+      // 4. Если сумка полная - пробуем рюкзак
+      if (!placed && newEquipment.backpack?.items) {
+        for (let i = 0; i < newEquipment.backpack.items.length; i++) {
+          if (newEquipment.backpack.items[i] === null) {
+            newEquipment.backpack.items[i] = itemId;
+            placedItems.push(itemId);
+            placed = true;
+            break;
+          }
+        }
+      }
+
+      // 5. Если всё полное - предмет выпадает на землю (теряется)
+      if (!placed) {
+        droppedItems.push(itemId);
+      }
+    }
+
     const newStamina = currentStamina - 1;
 
     await playerRef.update({
-      inventory: newInventory,
+      equipment: newEquipment,
       'stats.stamina': newStamina,
       lastUpdated: FieldValue.serverTimestamp()
     });
 
     revalidatePath('/');
+
+    // Формируем сообщение о результате
+    let message = `Найдено: ${foundItems.length}`;
+    if (placedItems.length > 0) {
+      message += `, подобрано: ${placedItems.length}`;
+    }
+    if (droppedItems.length > 0) {
+      message += `, не поместилось: ${droppedItems.length}`;
+    }
+
     return {
       success: true,
-      message: foundItems.length > 0 ? `Найдено предметов: ${foundItems.length}` : 'Ничего не найдено',
-      items: foundItems,
+      message,
+      items: placedItems,
+      droppedItems,
       newStamina
     };
   } catch (e) {
@@ -627,8 +733,10 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
         name: animatronic.nameRu,
         currentNode: animatronic.allowedNodes[0],
         damage: 10,
-        moveChance: 50,
+        moveChance: 50,            // Устаревшее
         aggressionLevel: 1,
+        aiLevel: animatronic.aiLevel, // FNAF1-style AI level
+        difficulty: animatronic.difficulty, // Сложность уклонения
         color: animatronic.color
       });
     }

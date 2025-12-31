@@ -72,7 +72,7 @@
 // Импорт типа Item из types.ts
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import { Item } from './types';
+import { Item, CharacterStats, Equipment } from './types';
 
 // /END_ANCHOR:ITEMDATA/IMPORTS
 
@@ -422,7 +422,7 @@ export const ITEMS: Record<string, Item> = {
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // EQUIPMENT - Снаряжение
+  // EQUIPMENT - Снаряжение (с модификаторами статов при экипировке)
   // ─────────────────────────────────────────────────────────────────────────────
   flashlight: {
     id: 'flashlight',
@@ -431,7 +431,8 @@ export const ITEMS: Record<string, Item> = {
     type: 'equipment',
     value: 2000,
     size: 1,
-    icon: '🔦'
+    icon: '🔦',
+    statModifiers: { stealth: 2 } // Освещает путь - лучше видишь врагов
   },
   wrench: {
     id: 'wrench',
@@ -440,11 +441,86 @@ export const ITEMS: Record<string, Item> = {
     type: 'equipment',
     value: 1800,
     size: 1,
-    icon: '🔧'
+    icon: '🔧',
+    statModifiers: { attack: 1, defense: 1 } // Можно использовать как оружие
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // WEAPON - Оружие
+  // ARMOR - Броня и защита (новые предметы)
+  // ─────────────────────────────────────────────────────────────────────────────
+  security_helmet: {
+    id: 'security_helmet',
+    name: 'Security Helmet',
+    nameRu: 'Шлем охранника',
+    type: 'equipment',
+    value: 5000,
+    size: 2,
+    icon: '⛑️',
+    statModifiers: { defense: 2, maxHp: 10 }
+  },
+  security_vest: {
+    id: 'security_vest',
+    name: 'Security Vest',
+    nameRu: 'Бронежилет охранника',
+    type: 'equipment',
+    value: 8000,
+    size: 3,
+    icon: '🦺',
+    statModifiers: { defense: 3, speed: -1 }
+  },
+  night_vision: {
+    id: 'night_vision',
+    name: 'Night Vision Goggles',
+    nameRu: 'Прибор ночного видения',
+    type: 'equipment',
+    value: 12000,
+    size: 1,
+    icon: '🥽',
+    statModifiers: { stealth: 3, luck: 1 }
+  },
+  sneakers: {
+    id: 'sneakers',
+    name: 'Sneakers',
+    nameRu: 'Кроссовки',
+    type: 'equipment',
+    value: 3000,
+    size: 2,
+    icon: '👟',
+    statModifiers: { speed: 2, stealth: 1 }
+  },
+  tactical_gloves: {
+    id: 'tactical_gloves',
+    name: 'Tactical Gloves',
+    nameRu: 'Тактические перчатки',
+    type: 'equipment',
+    value: 2500,
+    size: 1,
+    icon: '🧤',
+    statModifiers: { attack: 1, luck: 1 }
+  },
+  backpack_large: {
+    id: 'backpack_large',
+    name: 'Large Backpack',
+    nameRu: 'Большой рюкзак',
+    type: 'equipment',
+    value: 6000,
+    size: 4,
+    icon: '🎒',
+    statModifiers: { capacity: 10, speed: -1 }
+  },
+  lucky_charm: {
+    id: 'lucky_charm',
+    name: 'Lucky Charm',
+    nameRu: 'Талисман удачи',
+    type: 'equipment',
+    value: 4000,
+    size: 1,
+    icon: '🍀',
+    statModifiers: { luck: 3 }
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // WEAPON - Оружие (с модификаторами при экипировке в слот оружия)
   // ─────────────────────────────────────────────────────────────────────────────
   knife: {
     id: 'knife',
@@ -453,7 +529,8 @@ export const ITEMS: Record<string, Item> = {
     type: 'weapon',
     value: 3500,
     size: 1,
-    icon: '🔪'
+    icon: '🔪',
+    statModifiers: { attack: 3, speed: 1 }
   },
   pan: {
     id: 'pan',
@@ -462,7 +539,18 @@ export const ITEMS: Record<string, Item> = {
     type: 'weapon',
     value: 2000,
     size: 2,
-    icon: '🍳'
+    icon: '🍳',
+    statModifiers: { attack: 2, defense: 2 }
+  },
+  bat: {
+    id: 'bat',
+    name: 'Baseball Bat',
+    nameRu: 'Бейсбольная бита',
+    type: 'weapon',
+    value: 4000,
+    size: 2,
+    icon: '🏏',
+    statModifiers: { attack: 4 }
   },
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -520,3 +608,89 @@ export function formatRoubles(value: number): string {
 }
 
 // /END_ANCHOR:ITEMDATA/FORMAT_ROUBLES
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:ITEMDATA/STAT_MODIFIERS
+// Расчёт эффективных статов с учётом экипированных предметов
+// КОНТРАКТ: Возвращает итоговые статы = базовые + модификаторы от экипировки
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Рассчитывает эффективные характеристики с учётом экипированных предметов
+ * @param baseStats - Базовые характеристики персонажа
+ * @param equipment - Экипировка персонажа
+ * @returns Объект с эффективными статами и детализацией модификаторов
+ */
+export function calculateEffectiveStats(
+  baseStats: CharacterStats,
+  equipment: Equipment
+): { stats: CharacterStats; modifiers: Partial<CharacterStats>; itemBonuses: { itemId: string; bonuses: Partial<CharacterStats> }[] } {
+  const modifiers: Partial<CharacterStats> = {};
+  const itemBonuses: { itemId: string; bonuses: Partial<CharacterStats> }[] = [];
+
+  // Функция для добавления модификаторов от предмета
+  const addModifiersFromItem = (itemId: string | null) => {
+    if (!itemId) return;
+    const item = getItemById(itemId);
+    if (!item?.statModifiers) return;
+
+    itemBonuses.push({ itemId, bonuses: { ...item.statModifiers } });
+
+    for (const [stat, value] of Object.entries(item.statModifiers)) {
+      const statKey = stat as keyof CharacterStats;
+      modifiers[statKey] = (modifiers[statKey] || 0) + (value as number);
+    }
+  };
+
+  // Слоты экипировки (шлем, броня, одежда, оружие и обвесы)
+  addModifiersFromItem(equipment.helmet);
+  addModifiersFromItem(equipment.armor);
+  addModifiersFromItem(equipment.clothes);
+  addModifiersFromItem(equipment.weapon);
+  addModifiersFromItem(equipment.scope);
+  addModifiersFromItem(equipment.tactical);
+  addModifiersFromItem(equipment.suppressor);
+
+  // Карманы (все 4)
+  if (equipment.pockets) {
+    for (const itemId of equipment.pockets) {
+      addModifiersFromItem(itemId);
+    }
+  }
+
+  // Спецслоты (все 3)
+  if (equipment.specials) {
+    for (const itemId of equipment.specials) {
+      addModifiersFromItem(itemId);
+    }
+  }
+
+  // Расчёт итоговых статов
+  const effectiveStats: CharacterStats = {
+    attack: Math.max(0, baseStats.attack + (modifiers.attack || 0)),
+    defense: Math.max(0, baseStats.defense + (modifiers.defense || 0)),
+    speed: Math.max(0, baseStats.speed + (modifiers.speed || 0)),
+    stealth: Math.max(0, baseStats.stealth + (modifiers.stealth || 0)),
+    luck: Math.max(0, baseStats.luck + (modifiers.luck || 0)),
+    capacity: Math.max(1, baseStats.capacity + (modifiers.capacity || 0)),
+    hp: baseStats.hp, // HP не меняется от экипировки напрямую
+    maxHp: Math.max(1, baseStats.maxHp + (modifiers.maxHp || 0)),
+    stamina: baseStats.stamina, // Stamina не меняется от экипировки
+    maxStamina: Math.max(1, baseStats.maxStamina + (modifiers.maxStamina || 0)),
+  };
+
+  return { stats: effectiveStats, modifiers, itemBonuses };
+}
+
+/**
+ * Получает только модификаторы от экипировки (без базовых статов)
+ */
+export function getEquipmentModifiers(equipment: Equipment): Partial<CharacterStats> {
+  const result = calculateEffectiveStats(
+    { attack: 0, defense: 0, speed: 0, stealth: 0, luck: 0, capacity: 0, hp: 0, maxHp: 0, stamina: 0, maxStamina: 0 },
+    equipment
+  );
+  return result.modifiers;
+}
+
+// /END_ANCHOR:ITEMDATA/STAT_MODIFIERS

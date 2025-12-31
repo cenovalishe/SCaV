@@ -44,36 +44,185 @@ interface DragSource {
 interface SlotConfig {
   size: '1x1' | '2x1' | '2x2';
   index: number;
+  subCellsCount?: number; // Количество подъячеек (для 2x2 = 4)
 }
 
-// Конфигурация слотов рюкзака: два 2x2, один 2x1, три 1x1
+// Конфигурация слотов рюкзака: два слота 2x2 (с подъячейками), один 2x1, три 1x1
+// Слоты 2x2 содержат 4 подъячейки каждый, что даёт гибкость размещения
 const BACKPACK_SLOTS: SlotConfig[] = [
-  { size: '2x2', index: 0 },
-  { size: '2x2', index: 1 },
+  { size: '2x2', index: 0, subCellsCount: 4 },  // Индексы подъячеек: 0-3
+  { size: '2x2', index: 1, subCellsCount: 4 },  // Индексы подъячеек: 4-7
   { size: '2x1', index: 2 },
   { size: '1x1', index: 3 },
   { size: '1x1', index: 4 },
   { size: '1x1', index: 5 },
 ];
 
-// Конфигурация слотов разгрузки: четыре 1x1
+// Конфигурация слотов разгрузки: один слот 2x2 (с подъячейками)
 const RIG_SLOTS: SlotConfig[] = [
-  { size: '1x1', index: 0 },
-  { size: '1x1', index: 1 },
-  { size: '1x1', index: 2 },
-  { size: '1x1', index: 3 },
+  { size: '2x2', index: 0, subCellsCount: 4 },  // 4 подъячейки 1x1
 ];
 
-// Конфигурация слотов сумки: один 2x1, два 1x1
+// Конфигурация слотов сумки: один слот 2x2 (с подъячейками)
 const BAG_SLOTS: SlotConfig[] = [
-  { size: '2x1', index: 0 },
-  { size: '1x1', index: 1 },
-  { size: '1x1', index: 2 },
+  { size: '2x2', index: 0, subCellsCount: 4 },  // 4 подъячейки 1x1
 ];
 
 // Базовый размер единичного слота (увеличен)
 const SLOT_BASE_SIZE = 48; // px
 const SLOT_GAP = 4; // px
+
+// Компонент слота 2x2 с подъячейками
+// Позволяет разместить:
+// - 1 предмет 2x2 (занимает все 4 ячейки)
+// - 2 предмета 2x1 (каждый занимает 2 ячейки)
+// - 1 предмет 2x1 + 2 предмета 1x1
+// - 4 предмета 1x1
+function SubCellSlot2x2({
+  items,
+  color = 'zinc',
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onClick,
+  dragOverTarget,
+  baseIndex
+}: {
+  items: (string | null)[]; // 4 подъячейки
+  color?: 'zinc' | 'red' | 'blue' | 'orange';
+  onDragStart?: (e: DragEvent, itemId: string, subCellIndex: number) => void;
+  onDragOver?: (e: DragEvent, subCellIndex: number) => void;
+  onDrop?: (e: DragEvent, subCellIndex: number) => void;
+  onClick?: (e: MouseEvent, itemId: string, subCellIndex: number) => void;
+  dragOverTarget?: number | null;
+  baseIndex: number;
+}) {
+  const colorSchemes = {
+    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15', highlight: 'border-white/30' },
+    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30', highlight: 'border-red-400/50' },
+    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30', highlight: 'border-blue-400/50' },
+    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30', highlight: 'border-orange-400/50' },
+  };
+  const scheme = colorSchemes[color];
+
+  // Анализируем какие предметы занимают какие ячейки
+  const cellContents: { itemId: string | null; isMain: boolean; size: number }[] = [];
+  const processedItems = new Set<string>();
+
+  for (let i = 0; i < 4; i++) {
+    const itemId = items[i];
+    if (!itemId) {
+      cellContents[i] = { itemId: null, isMain: true, size: 1 };
+      continue;
+    }
+
+    if (processedItems.has(itemId)) {
+      // Этот предмет уже обработан - это вторичная ячейка
+      cellContents[i] = { itemId, isMain: false, size: 1 };
+      continue;
+    }
+
+    const item = getItemById(itemId);
+    const itemSize = item?.size || 1;
+    processedItems.add(itemId);
+    cellContents[i] = { itemId, isMain: true, size: itemSize };
+  }
+
+  return (
+    <div
+      className={`grid grid-cols-2 gap-0.5 p-0.5 bg-gradient-to-br ${scheme.bg} border ${scheme.border} rounded`}
+      style={{ width: SLOT_BASE_SIZE * 2 + SLOT_GAP, height: SLOT_BASE_SIZE * 2 + SLOT_GAP }}
+    >
+      {cellContents.map((cell, i) => {
+        const item = cell.itemId ? getItemById(cell.itemId) : null;
+        const isDragOver = dragOverTarget === baseIndex + i;
+
+        // Пропускаем рендер вторичных ячеек больших предметов
+        if (!cell.isMain && cell.itemId) {
+          return <div key={i} className="w-full h-full" />;
+        }
+
+        // Для предметов 2x2 - рендерим на все 4 ячейки
+        if (item && item.size >= 4) {
+          if (i !== 0) return null;
+          return (
+            <div
+              key={i}
+              draggable={!!item}
+              onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+              onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+              onDrop={(e) => onDrop?.(e, i)}
+              onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+              className={`
+                col-span-2 row-span-2 flex items-center justify-center
+                bg-black/30 border border-white/10 rounded cursor-pointer
+                hover:scale-[1.02] hover:border-white/30 transition-all
+                ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+              `}
+              style={{ width: '100%', height: '100%' }}
+              title={item ? `${item.nameRu} (${item.size} ячеек)` : undefined}
+            >
+              <span className="text-3xl drop-shadow-md">{item.icon}</span>
+            </div>
+          );
+        }
+
+        // Для предметов 2x1 - рендерим на 2 ячейки (горизонтально или вертикально)
+        if (item && item.size === 2) {
+          const isHorizontal = i === 0 || i === 2; // Верхний или нижний ряд
+          if (isHorizontal) {
+            return (
+              <div
+                key={i}
+                draggable={!!item}
+                onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+                onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+                onDrop={(e) => onDrop?.(e, i)}
+                onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+                className={`
+                  col-span-2 flex items-center justify-center
+                  bg-black/30 border border-white/10 rounded cursor-pointer
+                  hover:scale-[1.02] hover:border-white/30 transition-all
+                  ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+                `}
+                title={item ? `${item.nameRu} (${item.size} ячеек)` : undefined}
+              >
+                <span className="text-2xl drop-shadow-md">{item.icon}</span>
+              </div>
+            );
+          }
+        }
+
+        // Стандартная ячейка 1x1
+        return (
+          <div
+            key={i}
+            draggable={!!item}
+            onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+            onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+            onDrop={(e) => onDrop?.(e, i)}
+            onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+            className={`
+              flex items-center justify-center
+              bg-black/30 border border-white/10 rounded cursor-pointer
+              hover:border-white/20 transition-all
+              ${isDragOver ? 'border-green-400 bg-green-900/30 scale-105' : ''}
+              ${item ? 'hover:scale-[1.02]' : ''}
+            `}
+            style={{ width: SLOT_BASE_SIZE - 4, height: SLOT_BASE_SIZE - 4 }}
+            title={item ? `${item.nameRu}` : '1x1'}
+          >
+            {item ? (
+              <span className="text-xl drop-shadow-md">{item.icon}</span>
+            ) : (
+              <div className="text-white/10 text-[8px] font-mono">1x1</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 // Компонент слота с переменным размером
 function VariableSlot({
@@ -522,86 +671,148 @@ export default function InventoryTab({
 
         {/* ПРАВАЯ ЧАСТЬ - Контейнеры (компактно сгруппированы) */}
         <div className="flex-1 flex flex-col gap-2 min-w-0">
-          {/* Разгрузка */}
+          {/* Разгрузка - с подъячейками 2x2 */}
           {hasRig && (
             <div className="p-2 bg-gradient-to-r from-red-950/50 to-red-900/30 border border-red-500/30 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm">🎽</span>
                 <span className="text-red-400 font-mono text-[10px] uppercase tracking-wider">Разгрузка</span>
                 <span className="text-red-400/50 font-mono text-[10px] ml-auto">
-                  {equipment.rig?.items.filter(i => i !== null).length || 0}/{RIG_SLOTS.length}
+                  {equipment.rig?.items.filter(i => i !== null).length || 0}/4
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
-                {RIG_SLOTS.map((slot) => (
-                  <VariableSlot
-                    key={slot.index}
-                    size={slot.size}
-                    itemId={equipment.rig?.items[slot.index] || null}
-                    color="red"
-                    onDragStart={(e) => equipment.rig?.items[slot.index] && handleDragStart(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
-                    onDragOver={(e) => handleDragOver(e, 'rig', slot.index)}
-                    onDrop={(e) => handleDrop(e, 'rig', slot.index)}
-                    onClick={(e) => equipment.rig?.items[slot.index] && handleItemClick(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
-                    isDragOver={dragOverTarget?.type === 'rig' && dragOverTarget?.index === slot.index}
-                  />
-                ))}
+                {RIG_SLOTS.map((slot) => {
+                  if (slot.subCellsCount) {
+                    // Слот с подъячейками
+                    const subCellItems = equipment.rig?.items.slice(slot.index * 4, slot.index * 4 + 4) || [null, null, null, null];
+                    return (
+                      <SubCellSlot2x2
+                        key={slot.index}
+                        items={subCellItems}
+                        color="red"
+                        baseIndex={slot.index * 4}
+                        onDragStart={(e, itemId, subIdx) => handleDragStart(e, itemId, 'rig', slot.index * 4 + subIdx)}
+                        onDragOver={(e, subIdx) => handleDragOver(e, 'rig', slot.index * 4 + subIdx)}
+                        onDrop={(e, subIdx) => handleDrop(e, 'rig', slot.index * 4 + subIdx)}
+                        onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'rig', slot.index * 4 + subIdx)}
+                        dragOverTarget={dragOverTarget?.type === 'rig' ? dragOverTarget.index ?? null : null}
+                      />
+                    );
+                  }
+                  return (
+                    <VariableSlot
+                      key={slot.index}
+                      size={slot.size}
+                      itemId={equipment.rig?.items[slot.index] || null}
+                      color="red"
+                      onDragStart={(e) => equipment.rig?.items[slot.index] && handleDragStart(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
+                      onDragOver={(e) => handleDragOver(e, 'rig', slot.index)}
+                      onDrop={(e) => handleDrop(e, 'rig', slot.index)}
+                      onClick={(e) => equipment.rig?.items[slot.index] && handleItemClick(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
+                      isDragOver={dragOverTarget?.type === 'rig' && dragOverTarget?.index === slot.index}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Сумка */}
+          {/* Сумка - с подъячейками 2x2 */}
           {hasBag && (
             <div className="p-2 bg-gradient-to-r from-blue-950/50 to-blue-900/30 border border-blue-500/30 rounded-lg">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm">👜</span>
                 <span className="text-blue-400 font-mono text-[10px] uppercase tracking-wider">Сумка</span>
                 <span className="text-blue-400/50 font-mono text-[10px] ml-auto">
-                  {equipment.bag?.items.filter(i => i !== null).length || 0}/{BAG_SLOTS.length}
+                  {equipment.bag?.items.filter(i => i !== null).length || 0}/4
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
-                {BAG_SLOTS.map((slot) => (
-                  <VariableSlot
-                    key={slot.index}
-                    size={slot.size}
-                    itemId={equipment.bag?.items[slot.index] || null}
-                    color="blue"
-                    onDragStart={(e) => equipment.bag?.items[slot.index] && handleDragStart(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
-                    onDragOver={(e) => handleDragOver(e, 'bag', slot.index)}
-                    onDrop={(e) => handleDrop(e, 'bag', slot.index)}
-                    onClick={(e) => equipment.bag?.items[slot.index] && handleItemClick(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
-                    isDragOver={dragOverTarget?.type === 'bag' && dragOverTarget?.index === slot.index}
-                  />
-                ))}
+                {BAG_SLOTS.map((slot) => {
+                  if (slot.subCellsCount) {
+                    const subCellItems = equipment.bag?.items.slice(slot.index * 4, slot.index * 4 + 4) || [null, null, null, null];
+                    return (
+                      <SubCellSlot2x2
+                        key={slot.index}
+                        items={subCellItems}
+                        color="blue"
+                        baseIndex={slot.index * 4}
+                        onDragStart={(e, itemId, subIdx) => handleDragStart(e, itemId, 'bag', slot.index * 4 + subIdx)}
+                        onDragOver={(e, subIdx) => handleDragOver(e, 'bag', slot.index * 4 + subIdx)}
+                        onDrop={(e, subIdx) => handleDrop(e, 'bag', slot.index * 4 + subIdx)}
+                        onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'bag', slot.index * 4 + subIdx)}
+                        dragOverTarget={dragOverTarget?.type === 'bag' ? dragOverTarget.index ?? null : null}
+                      />
+                    );
+                  }
+                  return (
+                    <VariableSlot
+                      key={slot.index}
+                      size={slot.size}
+                      itemId={equipment.bag?.items[slot.index] || null}
+                      color="blue"
+                      onDragStart={(e) => equipment.bag?.items[slot.index] && handleDragStart(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
+                      onDragOver={(e) => handleDragOver(e, 'bag', slot.index)}
+                      onDrop={(e) => handleDrop(e, 'bag', slot.index)}
+                      onClick={(e) => equipment.bag?.items[slot.index] && handleItemClick(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
+                      isDragOver={dragOverTarget?.type === 'bag' && dragOverTarget?.index === slot.index}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* Рюкзак */}
+          {/* Рюкзак - с подъячейками 2x2 */}
           {hasBackpack && (
             <div className="p-2 bg-gradient-to-r from-orange-950/50 to-orange-900/30 border border-orange-500/30 rounded-lg flex-1">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-sm">🎒</span>
                 <span className="text-orange-400 font-mono text-[10px] uppercase tracking-wider">Рюкзак</span>
                 <span className="text-orange-400/50 font-mono text-[10px] ml-auto">
-                  {equipment.backpack?.items.filter(i => i !== null).length || 0}/{BACKPACK_SLOTS.length}
+                  {equipment.backpack?.items.filter(i => i !== null).length || 0}/{equipment.backpack?.items.length || 0}
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
-                {BACKPACK_SLOTS.map((slot) => (
-                  <VariableSlot
-                    key={slot.index}
-                    size={slot.size}
-                    itemId={equipment.backpack?.items[slot.index] || null}
-                    color="orange"
-                    onDragStart={(e) => equipment.backpack?.items[slot.index] && handleDragStart(e, equipment.backpack.items[slot.index]!, 'backpack', slot.index)}
-                    onDragOver={(e) => handleDragOver(e, 'backpack', slot.index)}
-                    onDrop={(e) => handleDrop(e, 'backpack', slot.index)}
-                    onClick={(e) => equipment.backpack?.items[slot.index] && handleItemClick(e, equipment.backpack.items[slot.index]!, 'backpack', slot.index)}
-                    isDragOver={dragOverTarget?.type === 'backpack' && dragOverTarget?.index === slot.index}
-                  />
-                ))}
+                {BACKPACK_SLOTS.map((slot) => {
+                  if (slot.subCellsCount) {
+                    // Рассчитываем правильные индексы для подъячеек рюкзака
+                    // Первый слот 2x2: индексы 0-3, Второй слот 2x2: индексы 4-7
+                    const baseIdx = slot.index * 4;
+                    const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 4) || [null, null, null, null];
+                    return (
+                      <SubCellSlot2x2
+                        key={slot.index}
+                        items={subCellItems}
+                        color="orange"
+                        baseIndex={baseIdx}
+                        onDragStart={(e, itemId, subIdx) => handleDragStart(e, itemId, 'backpack', baseIdx + subIdx)}
+                        onDragOver={(e, subIdx) => handleDragOver(e, 'backpack', baseIdx + subIdx)}
+                        onDrop={(e, subIdx) => handleDrop(e, 'backpack', baseIdx + subIdx)}
+                        onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'backpack', baseIdx + subIdx)}
+                        dragOverTarget={dragOverTarget?.type === 'backpack' ? dragOverTarget.index ?? null : null}
+                      />
+                    );
+                  }
+                  // Обычные слоты (2x1, 1x1) - индексы идут после слотов 2x2
+                  // Слот 2x1 (index 2): реальный индекс 8
+                  // Слоты 1x1 (index 3,4,5): реальные индексы 9,10,11
+                  const realIndex = slot.index < 2 ? slot.index : 8 + (slot.index - 2);
+                  return (
+                    <VariableSlot
+                      key={slot.index}
+                      size={slot.size}
+                      itemId={equipment.backpack?.items[realIndex] || null}
+                      color="orange"
+                      onDragStart={(e) => equipment.backpack?.items[realIndex] && handleDragStart(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
+                      onDragOver={(e) => handleDragOver(e, 'backpack', realIndex)}
+                      onDrop={(e) => handleDrop(e, 'backpack', realIndex)}
+                      onClick={(e) => equipment.backpack?.items[realIndex] && handleItemClick(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
+                      isDragOver={dragOverTarget?.type === 'backpack' && dragOverTarget?.index === realIndex}
+                    />
+                  );
+                })}
               </div>
             </div>
           )}
