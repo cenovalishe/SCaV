@@ -34,30 +34,57 @@ interface WheelRandomizerProps {
   onResult: (result: WheelResult) => void;
   title?: string;
   onStaminaReset?: () => void;
+  animatronicType?: string; // Тип аниматроника для определения диапазона урона
 }
 
-// Взвешенные значения с неоновыми цветами
-const WHEEL_VALUES = [
-  { value: 1, weight: 20, color: '#00ff88', glow: '#00ff8855' },
-  { value: 2, weight: 17, color: '#22ff66', glow: '#22ff6655' },
-  { value: 3, weight: 15, color: '#66ff44', glow: '#66ff4455' },
-  { value: 4, weight: 12, color: '#aaff00', glow: '#aaff0055' },
-  { value: 5, weight: 10, color: '#ffdd00', glow: '#ffdd0055' },
-  { value: 6, weight: 8, color: '#ffaa00', glow: '#ffaa0055' },
-  { value: 7, weight: 6, color: '#ff7700', glow: '#ff770055' },
-  { value: 8, weight: 5, color: '#ff4400', glow: '#ff440055' },
-  { value: 9, weight: 4, color: '#ff0044', glow: '#ff004455' },
-  { value: 10, weight: 3, color: '#ff0000', glow: '#ff000055' },
-];
+// Диапазоны урона для каждого аниматроника
+// Chica: 1-10 (самый лёгкий), Bonnie: 11-20, Foxy: 21-30, Freddy: 31-40 (самый сложный)
+const ANIMATRONIC_DAMAGE_RANGES: Record<string, { min: number; max: number; color: string }> = {
+  chica: { min: 1, max: 10, color: '#EAB308' },   // Жёлтый
+  bonnie: { min: 11, max: 20, color: '#3B82F6' }, // Синий
+  foxy: { min: 21, max: 30, color: '#EF4444' },   // Красный
+  freddy: { min: 31, max: 40, color: '#92400E' }, // Коричневый
+  default: { min: 1, max: 10, color: '#ff0000' }
+};
 
-const TOTAL_WEIGHT = WHEEL_VALUES.reduce((sum, v) => sum + v.weight, 0);
+// Базовые веса (для 10 значений) - от меньшего к большему урону
+const BASE_WEIGHTS = [20, 17, 15, 12, 10, 8, 6, 5, 4, 3];
 
-function getWheelSegments() {
+// Генерация цветов от зелёного к красному
+function getValueColor(index: number, total: number): { color: string; glow: string } {
+  const ratio = index / (total - 1);
+  // Интерполяция от зелёного (#00ff88) к красному (#ff0000)
+  const r = Math.round(ratio * 255);
+  const g = Math.round((1 - ratio) * 255 * 0.6 + (1 - ratio) * 136);
+  const b = Math.round((1 - ratio) * 136 * 0.5);
+  const color = `rgb(${r}, ${g}, ${b})`;
+  const glow = `rgba(${r}, ${g}, ${b}, 0.3)`;
+  return { color, glow };
+}
+
+// Создаёт массив значений для заданного диапазона урона
+function createWheelValuesForRange(min: number, max: number) {
+  const values = [];
+  for (let i = 0; i < 10; i++) {
+    const value = min + i;
+    const colors = getValueColor(i, 10);
+    values.push({
+      value,
+      weight: BASE_WEIGHTS[i],
+      color: colors.color,
+      glow: colors.glow
+    });
+  }
+  return values;
+}
+
+function getWheelSegments(wheelValues: typeof WHEEL_VALUES_DEFAULT) {
+  const totalWeight = wheelValues.reduce((sum, v) => sum + v.weight, 0);
   const segments: { value: number; startAngle: number; endAngle: number; color: string; glow: string }[] = [];
   let currentAngle = 0;
 
-  for (const item of WHEEL_VALUES) {
-    const anglePortion = (item.weight / TOTAL_WEIGHT) * 360;
+  for (const item of wheelValues) {
+    const anglePortion = (item.weight / totalWeight) * 360;
     segments.push({
       value: item.value,
       startAngle: currentAngle,
@@ -71,22 +98,23 @@ function getWheelSegments() {
   return segments;
 }
 
-function getWeightedRandomValue(): number {
-  const random = Math.random() * TOTAL_WEIGHT;
+function getWeightedRandomValue(wheelValues: typeof WHEEL_VALUES_DEFAULT): number {
+  const totalWeight = wheelValues.reduce((sum, v) => sum + v.weight, 0);
+  const random = Math.random() * totalWeight;
   let cumulative = 0;
 
-  for (const item of WHEEL_VALUES) {
+  for (const item of wheelValues) {
     cumulative += item.weight;
     if (random <= cumulative) {
       return item.value;
     }
   }
 
-  return 1;
+  return wheelValues[0].value;
 }
 
-function getAngleForValue(value: number): number {
-  const segments = getWheelSegments();
+function getAngleForValue(value: number, wheelValues: typeof WHEEL_VALUES_DEFAULT): number {
+  const segments = getWheelSegments(wheelValues);
   const segment = segments.find(s => s.value === value);
   if (!segment) return 0;
   // Центр сегмента - стрелка указывает вверх (на 0 градусов)
@@ -95,13 +123,17 @@ function getAngleForValue(value: number): number {
   return centerAngle;
 }
 
+// Дефолтные значения (используются для Chica или когда тип не указан)
+const WHEEL_VALUES_DEFAULT = createWheelValuesForRange(1, 10);
+
 const RESPIN_DAMAGE = 5;
 const RETREAT_DAMAGE = 15;
 
 export default function WheelRandomizer({
   onResult,
   title = 'УРОН',
-  onStaminaReset
+  onStaminaReset,
+  animatronicType
 }: WheelRandomizerProps) {
   const [isSpinning, setIsSpinning] = useState(false);
   const [rotation, setRotation] = useState(0);
@@ -112,7 +144,18 @@ export default function WheelRandomizer({
   const [respinCount, setRespinCount] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const segments = getWheelSegments();
+  // Получаем диапазон урона для данного аниматроника
+  const damageRange = animatronicType
+    ? ANIMATRONIC_DAMAGE_RANGES[animatronicType.toLowerCase()] || ANIMATRONIC_DAMAGE_RANGES.default
+    : ANIMATRONIC_DAMAGE_RANGES.default;
+
+  // Создаём значения колеса для этого аниматроника
+  const wheelValues = React.useMemo(
+    () => createWheelValuesForRange(damageRange.min, damageRange.max),
+    [damageRange.min, damageRange.max]
+  );
+
+  const segments = getWheelSegments(wheelValues);
 
   // Рисуем улучшенное колесо
   useEffect(() => {
@@ -239,10 +282,10 @@ export default function WheelRandomizer({
     setIsSpinning(true);
     setShowResult(false);
 
-    const result = getWeightedRandomValue();
+    const result = getWeightedRandomValue(wheelValues);
     setTargetValue(result);
 
-    const targetAngle = getAngleForValue(result);
+    const targetAngle = getAngleForValue(result, wheelValues);
     const spins = 6 + Math.floor(Math.random() * 4);
 
     // Корректировка: учитываем текущую позицию колеса при респине
@@ -260,7 +303,7 @@ export default function WheelRandomizer({
       const finalRotation = spins * 360 + delta;
       return prev + finalRotation;
     });
-  }, [isSpinning]);
+  }, [isSpinning, wheelValues]);
 
   useEffect(() => {
     if (!isSpinning) return;
@@ -308,7 +351,7 @@ export default function WheelRandomizer({
   }, [targetValue, accumulatedDamage, onResult, handleSpin]);
 
   const resultColor = targetValue !== null
-    ? WHEEL_VALUES.find(v => v.value === targetValue)?.color || '#fff'
+    ? wheelValues.find(v => v.value === targetValue)?.color || '#fff'
     : '#fff';
 
   return (
@@ -575,9 +618,9 @@ export default function WheelRandomizer({
       {/* Легенда справа от колеса */}
       <div className="relative z-10 flex flex-col gap-1.5 p-4 bg-black/60 border border-white/10 rounded-xl max-h-[400px] overflow-y-auto">
         <div className="text-white/50 font-mono text-xs uppercase tracking-wider mb-2 text-center border-b border-white/10 pb-2">
-          📊 Шансы
+          📊 Урон: {damageRange.min}-{damageRange.max}
         </div>
-        {WHEEL_VALUES.map(v => (
+        {wheelValues.map(v => (
           <div
             key={v.value}
             className="flex items-center gap-3 px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg transition-all"
@@ -587,7 +630,7 @@ export default function WheelRandomizer({
               style={{ backgroundColor: v.color, boxShadow: `0 0 8px ${v.color}` }}
             />
             <span
-              className="font-mono text-lg font-bold w-6"
+              className="font-mono text-lg font-bold w-8"
               style={{ color: v.color }}
             >
               {v.value}
@@ -596,7 +639,7 @@ export default function WheelRandomizer({
               <div
                 className="h-full rounded-full transition-all"
                 style={{
-                  width: `${(v.weight / WHEEL_VALUES[0].weight) * 100}%`,
+                  width: `${(v.weight / wheelValues[0].weight) * 100}%`,
                   backgroundColor: v.color
                 }}
               />

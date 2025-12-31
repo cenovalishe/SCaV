@@ -313,17 +313,27 @@ export interface AnimatronicSpawnData {
   nameEn: string;
   color: string;
   allowedNodes: string[];
+  aiLevel: number;        // FNAF1-style: если random(1-20) < aiLevel, аниматроник двигается
+  difficulty: number;     // Сложность уклонения для броска кубика
 }
 
 export const ANIMATRONIC_SPAWNS: AnimatronicSpawnData[] = [
   { id: 'foxy', nameRu: 'Фокси', nameEn: 'Foxy', color: '#EF4444',
-    allowedNodes: ['8', 'D', 'G', '6', 'V'] },
+    allowedNodes: ['8', 'D', 'G', '6', 'V'],
+    aiLevel: 15,          // Очень активный
+    difficulty: 5 },      // Сложнее всего уклониться
   { id: 'bonnie', nameRu: 'Бонни', nameEn: 'Bonnie', color: '#3B82F6',
-    allowedNodes: ['7', '1', 'X', 'D', '9', 'G', '6', 'V'] },
+    allowedNodes: ['7', '1', 'X', 'D', '9', 'G', '6', 'V'],
+    aiLevel: 12,          // Средне-высокая активность
+    difficulty: 4 },
   { id: 'chica', nameRu: 'Чика', nameEn: 'Chica', color: '#EAB308',
-    allowedNodes: ['4', '1', 'X', '2', '3', '5', 'A', 'B'] },
+    allowedNodes: ['4', '1', 'X', '2', '3', '5', 'A', 'B'],
+    aiLevel: 8,           // Низкая активность
+    difficulty: 3 },      // Легче всего уклониться
   { id: 'freddy', nameRu: 'Фредди', nameEn: 'Freddy', color: '#92400E',
-    allowedNodes: ['1', '9', '3', '4', 'B', '7', '2'] }
+    allowedNodes: ['1', '9', '3', '4', 'B', '7', '2'],
+    aiLevel: 10,          // Средняя активность (Freddy более осторожен)
+    difficulty: 4 }
 ];
 
 export const OFFICE_NODE_ID = 'Y';

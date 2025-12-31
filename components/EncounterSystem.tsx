@@ -124,6 +124,7 @@ export default function EncounterSystem({
           onResult={handleWheelResult}
           title={`${animatronicName} АТАКУЕТ!`}
           onStaminaReset={onStaminaReset}
+          animatronicType={animatronicType}
         />
       )}
 

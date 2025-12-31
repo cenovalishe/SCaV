@@ -224,7 +224,8 @@ export default function GameBoard() {
     currentNode: e.currentNode,
     damage: 15,
     moveChance: 40,
-    aggressionLevel: 5
+    aggressionLevel: 5,
+    aiLevel: (e as any).aiLevel || 10 // FNAF1-style AI level
   }));
 
   const playersForPanel: PlayerStateType[] = allPlayers.map(p => ({

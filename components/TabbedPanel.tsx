@@ -94,7 +94,7 @@ export default function TabbedPanel({
       {/* Контент вкладок */}
       <div className="flex-1 p-3 overflow-hidden">
         {activeTab === 'character' && (
-          <CharacterTab stats={stats} playerName={playerName} />
+          <CharacterTab stats={stats} playerName={playerName} equipment={equipment} />
         )}
         {activeTab === 'inventory' && (
           <InventoryTab

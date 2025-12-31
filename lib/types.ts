@@ -126,13 +126,30 @@ export type EquipmentSlotType =
 
 export type ContainerType = 'rig' | 'bag' | 'backpack';
 
+// Структура ячейки в слоте 2x2 (каждый слот 2x2 = 4 подъячейки 1x1)
+// Индексы подъячеек в слоте 2x2:
+// [0][1]
+// [2][3]
+export interface SubCell {
+  itemId: string | null;      // ID предмета в этой подъячейке
+  masterCell?: number;        // Если предмет занимает несколько ячеек - индекс "мастер" ячейки
+}
+
+// Конфигурация слота контейнера
+export interface ContainerSlotConfig {
+  size: '1x1' | '2x1' | '2x2';
+  subCells?: SubCell[];       // Для 2x2 слотов - 4 подъячейки
+}
+
 export interface Container {
   id: string;
   type: ContainerType;
   name: string;
   nameRu: string;
   slots: number;              // Количество слотов
-  items: (string | null)[];   // ID предметов или null для пустых
+  items: (string | null)[];   // ID предметов или null для пустых (legacy)
+  // Новая система подъячеек для слотов 2x2
+  slotConfigs?: ContainerSlotConfig[];
 }
 
 // /END_ANCHOR:TYPES/CONTAINERS
@@ -154,6 +171,8 @@ export interface Item {
   effects?: ItemEffect[];
   stackable?: boolean;
   maxStack?: number;
+  // Модификаторы статов при экипировке (passive bonuses)
+  statModifiers?: Partial<Record<keyof CharacterStats, number>>;
 }
 
 export interface ItemEffect {
@@ -266,8 +285,9 @@ export interface AnimatronicState {
   name: string;
   currentNode: string;
   damage: number;
-  moveChance: number;     // Шанс перемещения (0-100)
+  moveChance: number;     // Устаревшее: Шанс перемещения (0-100)
   aggressionLevel: number;
+  aiLevel: number;        // FNAF1-style AI level (0-20): если random(1-20) < aiLevel, аниматроник двигается
 }
 
 // /END_ANCHOR:TYPES/ANIMATRONICS
