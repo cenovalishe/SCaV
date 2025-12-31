@@ -8,6 +8,23 @@
  *   Определяет структуры данных для персонажей, инвентаря, карты и игровой логики.
  *
  * ═══════════════════════════════════════════════════════════════════════════════
+ * SEMANTIC ANCHORS INDEX:
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * /START_ANCHOR:TYPES/CHARACTER_STATS .......... Интерфейс CharacterStats
+ * /START_ANCHOR:TYPES/EQUIPMENT_SLOTS .......... Тип EquipmentSlotType
+ * /START_ANCHOR:TYPES/CONTAINERS ............... Типы Container, ContainerType
+ * /START_ANCHOR:TYPES/ITEMS .................... Интерфейсы Item, ItemEffect
+ * /START_ANCHOR:TYPES/EQUIPMENT ................ Интерфейс Equipment
+ * /START_ANCHOR:TYPES/PLAYER_STATE ............. Интерфейс PlayerState
+ * /START_ANCHOR:TYPES/GAME_LOG ................. Интерфейс GameLogEntry
+ * /START_ANCHOR:TYPES/MAP_LOCATIONS ............ Типы DangerLevel, LocationLootType, LootEntry, NodeInfo
+ * /START_ANCHOR:TYPES/ANIMATRONICS ............. Интерфейс AnimatronicState
+ * /START_ANCHOR:TYPES/GAME_STATE ............... Интерфейс GameState
+ * /START_ANCHOR:TYPES/GAME_MECHANICS ........... Интерфейсы DiceRoll, PlayerAction
+ * /START_ANCHOR:TYPES/CAMERA_SYSTEM ............ Интерфейс CameraConfig
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
  * EXPORTS OVERVIEW:
  * ═══════════════════════════════════════════════════════════════════════════════
  *
@@ -52,56 +69,14 @@
  *   ← Нет внешних зависимостей (корневой модуль типов)
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * DATA STRUCTURES DETAIL:
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * CharacterStats (Характеристики):
- *   attack:5, defense:3, speed:4, stealth:3, luck:2, capacity:20
- *   hp/maxHp: 0-100, stamina/maxStamina: определяет очки действий за ход
- *
- * Equipment (Экипировка - EFT стиль):
- *   ┌────────────────────────────────────────┐
- *   │ [спец1][спец2][спец3]                  │
- *   │ [шлем ]                                │
- *   │ [броня]         [разг→ □□□□ ]          │
- *   │ [одежд]         [сумк→ □□□  ]          │
- *   │ [карм][карм][карм][карм] [рюкз→ □□□□□□]│
- *   │ [    оружие    ]                       │
- *   │ [приц][лцу/фон][глуш]                  │
- *   └────────────────────────────────────────┘
- *
- * PlayerState.status:
- *   IDLE → ожидание хода
- *   MOVING → в процессе перемещения
- *   IN_COMBAT → встреча с аниматроником
- *   LOOTING → собирает лут
- *   IN_OFFICE → в офисе (мини-игра выживания)
- *   DEAD → персонаж погиб
- *
- * GameState.turnPhase:
- *   planning → игроки планируют действия
- *   action → выполнение действий
- *   animatronic → ход аниматроников
- *   resolution → подсчёт результатов
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * GAME RULES CONTEXT:
- * ═══════════════════════════════════════════════════════════════════════════════
- *   - Игроки: 4-6 диких (scavs) из EFT
- *   - Продолжительность: 10 реальных дней, 5 игровых ночей
- *   - Ход: 1+d6 очков выносливости, действия: лутинг или перемещение
- *   - Победа: лидерство по рублям (ценность предметов)
- *   - Выход: активация кнопки в офисе
- *   - Аниматроники: перемещаются с шансом dangerPercent после хода игрока
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2024-12-30 | VERSION: 1.0.0
+ * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: CHARACTER STATS
+// /START_ANCHOR:TYPES/CHARACTER_STATS
 // Характеристики персонажа игрока
+// КОНТРАКТ: Все числовые поля должны быть >= 0, hp <= maxHp, stamina <= maxStamina
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface CharacterStats {
@@ -117,9 +92,12 @@ export interface CharacterStats {
   maxStamina: number;  // Максимальная выносливость (1+d6)
 }
 
+// /END_ANCHOR:TYPES/CHARACTER_STATS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: EQUIPMENT SLOTS
+// /START_ANCHOR:TYPES/EQUIPMENT_SLOTS
 // Типы слотов экипировки (EFT-стиль)
+// КОНТРАКТ: Строковый литеральный тип, одно из 14 значений
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type EquipmentSlotType =
@@ -138,9 +116,12 @@ export type EquipmentSlotType =
   | 'tactical'    // ЛЦУ/Фонарь - обвес
   | 'suppressor'; // Глушитель - обвес
 
+// /END_ANCHOR:TYPES/EQUIPMENT_SLOTS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: CONTAINERS
+// /START_ANCHOR:TYPES/CONTAINERS
 // Типы контейнеров для хранения предметов
+// КОНТРАКТ: items.length должен равняться slots
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type ContainerType = 'rig' | 'bag' | 'backpack';
@@ -154,9 +135,12 @@ export interface Container {
   items: (string | null)[];   // ID предметов или null для пустых
 }
 
+// /END_ANCHOR:TYPES/CONTAINERS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: ITEMS
+// /START_ANCHOR:TYPES/ITEMS
 // Предметы и их эффекты
+// КОНТРАКТ: value >= 0, size >= 1, stackable=true требует maxStack > 1
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface Item {
@@ -178,9 +162,12 @@ export interface ItemEffect {
   type: 'add' | 'multiply' | 'set';
 }
 
+// /END_ANCHOR:TYPES/ITEMS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: PLAYER EQUIPMENT
+// /START_ANCHOR:TYPES/EQUIPMENT
 // Полная структура экипировки игрока
+// КОНТРАКТ: pockets.length = 4, specials.length = 3
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface Equipment {
@@ -198,9 +185,12 @@ export interface Equipment {
   backpack: Container | null;   // Рюкзак (оранжевые слоты)
 }
 
+// /END_ANCHOR:TYPES/EQUIPMENT
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: PLAYER STATE
+// /START_ANCHOR:TYPES/PLAYER_STATE
 // Полное состояние игрока
+// КОНТРАКТ: status определяет доступные действия, turnActions >= 0
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface PlayerState {
@@ -216,9 +206,12 @@ export interface PlayerState {
   gameLog: GameLogEntry[];
 }
 
+// /END_ANCHOR:TYPES/PLAYER_STATE
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: GAME LOG
+// /START_ANCHOR:TYPES/GAME_LOG
 // Логирование игровых событий
+// КОНТРАКТ: timestamp - Unix timestamp в миллисекундах
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface GameLogEntry {
@@ -227,9 +220,12 @@ export interface GameLogEntry {
   type: 'move' | 'loot' | 'combat' | 'event' | 'system';
 }
 
+// /END_ANCHOR:TYPES/GAME_LOG
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: MAP & LOCATIONS
+// /START_ANCHOR:TYPES/MAP_LOCATIONS
 // Типы для карты и локаций
+// КОНТРАКТ: dangerPercent 0-100, chance в LootEntry 0-100
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type DangerLevel = 'safe' | 'low' | 'medium' | 'high' | 'extreme';
@@ -255,9 +251,12 @@ export interface NodeInfo {
   players: string[];        // ID игроков в этой точке
 }
 
+// /END_ANCHOR:TYPES/MAP_LOCATIONS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: ANIMATRONICS
+// /START_ANCHOR:TYPES/ANIMATRONICS
 // Состояние аниматроников (враги)
+// КОНТРАКТ: hp <= maxHp, moveChance 0-100, aggressionLevel определяет поведение
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface AnimatronicState {
@@ -272,9 +271,12 @@ export interface AnimatronicState {
   aggressionLevel: number;
 }
 
+// /END_ANCHOR:TYPES/ANIMATRONICS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: GAME STATE
+// /START_ANCHOR:TYPES/GAME_STATE
 // Глобальное состояние игры
+// КОНТРАКТ: currentNight 1-5, currentHour 12-6 (AM), dayNumber 1-10
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface GameState {
@@ -288,9 +290,12 @@ export interface GameState {
   animatronics: Record<string, AnimatronicState>;
 }
 
+// /END_ANCHOR:TYPES/GAME_STATE
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: GAME MECHANICS
+// /START_ANCHOR:TYPES/GAME_MECHANICS
 // Механики игры
+// КОНТРАКТ: DiceRoll.total = base + roll + sum(modifiers)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface DiceRoll {
@@ -302,9 +307,12 @@ export interface DiceRoll {
 
 export type PlayerAction = 'move' | 'loot' | 'use_item' | 'attack' | 'hide' | 'wait';
 
+// /END_ANCHOR:TYPES/GAME_MECHANICS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// SECTION: CAMERA SYSTEM
+// /START_ANCHOR:TYPES/CAMERA_SYSTEM
 // Система камер наблюдения
+// КОНТРАКТ: nodeId должен существовать в MAP_NODES_DATA
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface CameraConfig {
@@ -314,3 +322,5 @@ export interface CameraConfig {
   imageSrc: string;
   isWorking: boolean;
 }
+
+// /END_ANCHOR:TYPES/CAMERA_SYSTEM

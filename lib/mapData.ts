@@ -5,119 +5,51 @@
  *
  * PURPOSE: Игровая карта пиццерии Freddy Fazbear's - топология, комнаты, ноды
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ EXPORTS OVERVIEW                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ CONSTANTS:                                                                  │
- * │   MAP_ROOMS          - Массив из 13 комнат с координатами box для SVG      │
- * │   MAP_NODES_DATA     - Массив из 17 узлов навигации (граф карты)           │
- * │   MAP_JOINTS         - Массив из 13 дверных проёмов/проходов между комнатами│
- * │   ANIMATRONIC_SPAWNS - Допустимые ноды для каждого аниматроника            │
- * │   ROOM_IMAGES        - URL изображений комнат для камер                    │
- * │   DANGER_COLORS      - Tailwind классы для уровней опасности               │
- * │   DANGER_NAMES       - Русские названия уровней опасности                  │
- * │   LOOT_TYPE_COLORS   - Цвета типов лута (rare/common/supplies)             │
- * │                                                                             │
- * │ INTERFACES:                                                                 │
- * │   MapNodeData        - Структура узла карты                                │
- * │   MapJoint           - Структура дверного проёма/прохода                   │
- * │   AnimatronicSpawns  - Структура допустимых зон аниматроников              │
- * │                                                                             │
- * │ FUNCTIONS:                                                                  │
- * │   getNodeById(id)         → MapNodeData | undefined                        │
- * │   getRoomById(id)         → Room | undefined                               │
- * │   getRoomByNodeId(nodeId) → Room | undefined                               │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * SEMANTIC ANCHORS INDEX:
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DEPENDENCY GRAPH                                                            │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ IMPORTS FROM:                                                               │
- * │   ./types → DangerLevel, LootEntry, LocationLootType                       │
- * │                                                                             │
- * │ IMPORTED BY:                                                                │
- * │   lib/gameConfig.ts     → MAP_NODES_DATA, MapNodeData                      │
- * │   components/GameMap.tsx → MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS,          │
- * │                           DANGER_COLORS                                     │
- * │   components/InfoTab.tsx → getNodeById, DANGER_COLORS, DANGER_NAMES        │
- * │   components/CameraView.tsx → ROOM_IMAGES, getRoomByNodeId                 │
- * │   app/actions/gameActions.ts → MAP_NODES_DATA, ANIMATRONIC_SPAWNS          │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * /START_ANCHOR:MAPDATA/IMPORTS ............... Импорты типов
+ * /START_ANCHOR:MAPDATA/ROOMS ................. Константа MAP_ROOMS (13 комнат)
+ * /START_ANCHOR:MAPDATA/JOINTS ................ Константа MAP_JOINTS (13 проходов)
+ * /START_ANCHOR:MAPDATA/NODE_INTERFACE ........ Интерфейс MapNodeData
+ * /START_ANCHOR:MAPDATA/NODES ................. Константа MAP_NODES_DATA (17 узлов)
+ * /START_ANCHOR:MAPDATA/ANIMATRONIC_SPAWNS .... Константа ANIMATRONIC_SPAWNS
+ * /START_ANCHOR:MAPDATA/ROOM_IMAGES ........... Константа ROOM_IMAGES
+ * /START_ANCHOR:MAPDATA/DANGER_STYLING ........ Константы DANGER_COLORS, DANGER_NAMES
+ * /START_ANCHOR:MAPDATA/HELPER_FUNCTIONS ...... Функции getNodeById, getRoomById и др.
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ MAP TOPOLOGY (ASCII)                                                        │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │                                                                             │
- * │                    ┌────────────┬─────────────┐                             │
- * │                    │   STAGE    │  START [SF] │                             │
- * │                    │    [1]     │             │                             │
- * │   ┌────────────────┼─[D]───────[X]───────────┼─────────┐                    │
- * │   │   WORKSHOP     │                         │ REST    │                    │
- * │   │     [9]        │         DINING          │ HALL    │───┬───────┐        │
- * │   ├────────────────┤          [2]            │  [3]    │REST│REST  │        │
- * │   │  PIRATE COVE   │                         ├─────────┤ M  │  F   │        │
- * │   │   [8]────[G]───┼─────────────[A]─────────┤ KITCHEN │    │      │        │
- * │   └────────────────┤                         │  [4]    │    │      │        │
- * │                    │      │           │      └─────────┴────┴──────┘        │
- * │       ┌────────────┤     [6]         [5]────────────┐                       │
- * │       │  STORAGE   │      │           │   HALL B    │                       │
- * │       │   [7]      │      │           │             │                       │
- * │       └────────────┤     [V]         [B]            │                       │
- * │                    │      └────[Y]────┘             │                       │
- * │                    │        OFFICE                  │                       │
- * │                    └────────────────────────────────┘                       │
- * │                                                                             │
- * │ NODE TYPES:                                                                 │
- * │   SF = START_FINISH      - Точка входа/выхода                              │
- * │   X = LOOP_DISTRIBUTOR   - Распределитель маршрутов (к Сцене или Столовой) │
- * │   Y = LOOP_END           - Конечная точка маршрута (Офис)                  │
- * │   1-9 = POI_EVENT        - Точки интереса с событиями                      │
- * │   A,B,D,G,V = WAYPOINT   - Промежуточные точки                             │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * DEPENDENCY GRAPH:
+ * ═══════════════════════════════════════════════════════════════════════════════
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ PATH LOGIC (Directed Graph Edges)                                           │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ ENTRY:        SF → X                                                        │
- * │                                                                             │
- * │ NORTH BRANCH (Stage Path):                                                  │
- * │   X ─ ─> 1 → D → 9 (dead end, return to D)                                 │
- * │              D → 8 → G                                                      │
- * │                                                                             │
- * │ CENTER BRANCH (Dining Path):                                                │
- * │   X ─ ─> 2 → A (main junction)                                              │
- * │                                                                             │
- * │ FROM JUNCTION A:                                                            │
- * │   A → 3 (Restrooms, dead end)                                              │
- * │   A → 4 (Kitchen, dead end)                                                │
- * │   A → 5 → B → Y (East corridor to Office)                                  │
- * │                                                                             │
- * │ WEST CORRIDOR:                                                              │
- * │   G → 6 → 7 (Storage, dead end)                                            │
- * │        6 → V → Y (to Office)                                               │
- * │                                                                             │
- * │ OFFICE (Y):                                                                 │
- * │   Y ↔ V (west entrance)                                                    │
- * │   Y ↔ B (east entrance)                                                    │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * IMPORTS FROM:
+ *   ./types → DangerLevel, LootEntry, LocationLootType
  *
- * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ DANGER LEVELS                                                               │
- * ├─────────────────────────────────────────────────────────────────────────────┤
- * │   safe     (0%)      - Безопасно (только SF)                               │
- * │   low      (15-20%)  - Низкий риск (3, 7)                                  │
- * │   medium   (30-45%)  - Средний риск (X, D, 9, G, A, 5, 6)                  │
- * │   high     (50-60%)  - Высокий риск (1, 2, 4, V, B)                        │
- * │   extreme  (70-80%)  - Критический (8, Y)                                  │
- * └─────────────────────────────────────────────────────────────────────────────┘
+ * IMPORTED BY:
+ *   lib/gameConfig.ts      → MAP_NODES_DATA, MapNodeData
+ *   components/GameMap.tsx → MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS
+ *   components/InfoTab.tsx → getNodeById, DANGER_COLORS, DANGER_NAMES
+ *   app/actions/gameActions.ts → MAP_NODES_DATA, ANIMATRONIC_SPAWNS
  *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:MAPDATA/IMPORTS
+// Импорты типов из types.ts
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { DangerLevel, LootEntry, LocationLootType } from './types';
 
+// /END_ANCHOR:MAPDATA/IMPORTS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// ROOMS - Геометрия комнат для рендеринга подложки
+// /START_ANCHOR:MAPDATA/ROOMS
+// Геометрия комнат для рендеринга подложки (13 комнат)
+// КОНТРАКТ: box = [x1, y1, x2, y2] в процентах SVG viewBox
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const MAP_ROOMS = [
@@ -136,8 +68,12 @@ export const MAP_ROOMS = [
   { id: 'R_REST_F', label: 'Ж. УБОРНАЯ', labelEn: 'F. Restroom', box: [83, 39, 98, 58] }
 ];
 
+// /END_ANCHOR:MAPDATA/ROOMS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// JOINTS - Дверные проёмы и проходы между комнатами
+// /START_ANCHOR:MAPDATA/JOINTS
+// Дверные проёмы и проходы между комнатами (13 проходов)
+// КОНТРАКТ: axis='X' - горизонтальный проём, axis='Y' - вертикальный
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type JointType = 'DOOR' | 'OPENING' | 'CURTAIN_OPENING' | 'DOOR_SIDE' | 'HALLWAY' | 'DOOR_HIDDEN';
@@ -167,8 +103,12 @@ export const MAP_JOINTS: MapJoint[] = [
   { from: 'R_EAST', to: 'R_OFFICE', pos: [54, 90], width: 4, type: 'DOOR_SIDE', axis: 'Y' }
 ];
 
+// /END_ANCHOR:MAPDATA/JOINTS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// NODE DATA INTERFACE
+// /START_ANCHOR:MAPDATA/NODE_INTERFACE
+// Интерфейс узла карты
+// КОНТРАКТ: neighbors содержит только существующие id узлов
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface MapNodeData {
@@ -185,62 +125,38 @@ export interface MapNodeData {
   possibleLoot: LootEntry[];
 }
 
+// /END_ANCHOR:MAPDATA/NODE_INTERFACE
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// NODE GRAPH - 17 узлов навигации
+// /START_ANCHOR:MAPDATA/NODES
+// Граф узлов навигации - 17 узлов
+// КОНТРАКТ: Граф должен быть связным, SF - единственная точка входа
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const MAP_NODES_DATA: MapNodeData[] = [
-  // ─────────────────────────────────────────────────────────────────────────────
-  // START/FINISH - Точка входа/выхода
-  // ─────────────────────────────────────────────────────────────────────────────
+  // START_FINISH - Точка входа/выхода
   {
-    id: "SF",
-    type: "START_FINISH",
-    pos: [69, 7],
-    neighbors: ["X"],
-    roomId: 'R_START',
-    nameRu: 'Старт/Финиш',
-    nameEn: 'Start/Finish',
-    dangerLevel: 'safe',
-    dangerPercent: 0,
-    lootType: 'common',
-    possibleLoot: []
+    id: "SF", type: "START_FINISH", pos: [69, 7], neighbors: ["X"],
+    roomId: 'R_START', nameRu: 'Старт/Финиш', nameEn: 'Start/Finish',
+    dangerLevel: 'safe', dangerPercent: 0, lootType: 'common', possibleLoot: []
   },
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // LOOP_DISTRIBUTOR - Распределитель маршрутов (начало круга)
-  // ─────────────────────────────────────────────────────────────────────────────
+  // LOOP_DISTRIBUTOR - Распределитель маршрутов
   {
-    id: "X",
-    type: "LOOP_DISTRIBUTOR",
-    pos: [60, 19],
-    neighbors: ["SF", "1", "2"],  // Removed KX, splits to Stage (1) or Dining (2)
-    roomId: 'R_MAIN',
-    nameRu: 'Распределитель',
-    nameEn: 'Distributor',
-    dangerLevel: 'medium',
-    dangerPercent: 40,
-    lootType: 'common',
+    id: "X", type: "LOOP_DISTRIBUTOR", pos: [60, 19], neighbors: ["SF", "1", "2"],
+    roomId: 'R_MAIN', nameRu: 'Распределитель', nameEn: 'Distributor',
+    dangerLevel: 'medium', dangerPercent: 40, lootType: 'common',
     possibleLoot: [
       { itemId: 'bandage', chance: 30, minCount: 1, maxCount: 2 },
       { itemId: 'food', chance: 20, minCount: 1, maxCount: 1 }
     ]
   },
 
-  // ─────────────────────────────────────────────────────────────────────────────
   // POI_EVENT NODES - Точки интереса (1-9)
-  // ─────────────────────────────────────────────────────────────────────────────
   {
-    id: "1",
-    type: "POI_EVENT",
-    pos: [45, 8],
-    neighbors: ["X", "D"],  // From X, to D
-    roomId: 'R_STAGE',
-    nameRu: 'Сцена',
-    nameEn: 'Stage',
-    dangerLevel: 'high',
-    dangerPercent: 60,
-    lootType: 'rare',
+    id: "1", type: "POI_EVENT", pos: [45, 8], neighbors: ["X", "D"],
+    roomId: 'R_STAGE', nameRu: 'Сцена', nameEn: 'Stage',
+    dangerLevel: 'high', dangerPercent: 60, lootType: 'rare',
     possibleLoot: [
       { itemId: 'golden_freddy', chance: 5, minCount: 1, maxCount: 1 },
       { itemId: 'microphone', chance: 25, minCount: 1, maxCount: 1 },
@@ -248,16 +164,9 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "2",
-    type: "POI_EVENT",
-    pos: [45, 45],
-    neighbors: ["X", "A"],  // From X, to A
-    roomId: 'R_MAIN',
-    nameRu: 'Центр столовой',
-    nameEn: 'Dining Center',
-    dangerLevel: 'high',
-    dangerPercent: 55,
-    lootType: 'common',
+    id: "2", type: "POI_EVENT", pos: [45, 45], neighbors: ["X", "A"],
+    roomId: 'R_MAIN', nameRu: 'Центр столовой', nameEn: 'Dining Center',
+    dangerLevel: 'high', dangerPercent: 55, lootType: 'common',
     possibleLoot: [
       { itemId: 'pizza', chance: 40, minCount: 1, maxCount: 3 },
       { itemId: 'soda', chance: 35, minCount: 1, maxCount: 2 },
@@ -265,16 +174,9 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "3",
-    type: "POI_EVENT",
-    pos: [80, 38],
-    neighbors: ["A"],  // Dead end - only connects back to A
-    roomId: 'R_REST_HALL',
-    nameRu: 'Уборные',
-    nameEn: 'Restrooms',
-    dangerLevel: 'low',
-    dangerPercent: 15,
-    lootType: 'supplies',
+    id: "3", type: "POI_EVENT", pos: [80, 38], neighbors: ["A"],
+    roomId: 'R_REST_HALL', nameRu: 'Уборные', nameEn: 'Restrooms',
+    dangerLevel: 'low', dangerPercent: 15, lootType: 'supplies',
     possibleLoot: [
       { itemId: 'toilet_paper', chance: 60, minCount: 1, maxCount: 3 },
       { itemId: 'soap', chance: 40, minCount: 1, maxCount: 1 },
@@ -282,16 +184,9 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "4",
-    type: "POI_EVENT",
-    pos: [79, 68],
-    neighbors: ["A"],  // Dead end - only connects back to A (Kitchen)
-    roomId: 'R_KITCH',
-    nameRu: 'Кухня',
-    nameEn: 'Kitchen',
-    dangerLevel: 'high',
-    dangerPercent: 50,
-    lootType: 'supplies',
+    id: "4", type: "POI_EVENT", pos: [79, 68], neighbors: ["A"],
+    roomId: 'R_KITCH', nameRu: 'Кухня', nameEn: 'Kitchen',
+    dangerLevel: 'high', dangerPercent: 50, lootType: 'supplies',
     possibleLoot: [
       { itemId: 'knife', chance: 30, minCount: 1, maxCount: 1 },
       { itemId: 'pan', chance: 25, minCount: 1, maxCount: 1 },
@@ -299,48 +194,27 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "5",
-    type: "POI_EVENT",
-    pos: [59, 65],
-    neighbors: ["A", "B"],  // From A, to B (East corridor)
-    roomId: 'R_EAST',
-    nameRu: 'Коридор Б',
-    nameEn: 'East Hall',
-    dangerLevel: 'medium',
-    dangerPercent: 35,
-    lootType: 'common',
+    id: "5", type: "POI_EVENT", pos: [59, 65], neighbors: ["A", "B"],
+    roomId: 'R_EAST', nameRu: 'Коридор Б', nameEn: 'East Hall',
+    dangerLevel: 'medium', dangerPercent: 35, lootType: 'common',
     possibleLoot: [
       { itemId: 'poster', chance: 20, minCount: 1, maxCount: 1 },
       { itemId: 'coin', chance: 25, minCount: 1, maxCount: 2 }
     ]
   },
   {
-    id: "6",
-    type: "POI_EVENT",
-    pos: [31, 65],
-    neighbors: ["G", "7", "V"],  // From G, to 7 (Storage) and V
-    roomId: 'R_WEST',
-    nameRu: 'Коридор А',
-    nameEn: 'West Hall',
-    dangerLevel: 'medium',
-    dangerPercent: 35,
-    lootType: 'common',
+    id: "6", type: "POI_EVENT", pos: [31, 65], neighbors: ["G", "7", "V"],
+    roomId: 'R_WEST', nameRu: 'Коридор А', nameEn: 'West Hall',
+    dangerLevel: 'medium', dangerPercent: 35, lootType: 'common',
     possibleLoot: [
       { itemId: 'newspaper', chance: 30, minCount: 1, maxCount: 1 },
       { itemId: 'coin', chance: 25, minCount: 1, maxCount: 2 }
     ]
   },
   {
-    id: "7",
-    type: "POI_EVENT",
-    pos: [19, 73],
-    neighbors: ["6"],  // Dead end - only connects back to 6
-    roomId: 'R_CLST',
-    nameRu: 'Кладовка',
-    nameEn: 'Supply Closet',
-    dangerLevel: 'low',
-    dangerPercent: 20,
-    lootType: 'rare',
+    id: "7", type: "POI_EVENT", pos: [19, 73], neighbors: ["6"],
+    roomId: 'R_CLST', nameRu: 'Кладовка', nameEn: 'Supply Closet',
+    dangerLevel: 'low', dangerPercent: 20, lootType: 'rare',
     possibleLoot: [
       { itemId: 'key_card', chance: 15, minCount: 1, maxCount: 1 },
       { itemId: 'cleaning_supplies', chance: 45, minCount: 1, maxCount: 2 },
@@ -349,16 +223,9 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "8",
-    type: "POI_EVENT",
-    pos: [20, 45],  // Updated position per spec (was [10, 45])
-    neighbors: ["D", "G"],  // From D, to G
-    roomId: 'R_COVE',
-    nameRu: 'Пиратская бухта',
-    nameEn: 'Pirate Cove',
-    dangerLevel: 'extreme',
-    dangerPercent: 80,
-    lootType: 'rare',
+    id: "8", type: "POI_EVENT", pos: [20, 45], neighbors: ["D", "G"],
+    roomId: 'R_COVE', nameRu: 'Пиратская бухта', nameEn: 'Pirate Cove',
+    dangerLevel: 'extreme', dangerPercent: 80, lootType: 'rare',
     possibleLoot: [
       { itemId: 'hook', chance: 30, minCount: 1, maxCount: 1 },
       { itemId: 'eyepatch', chance: 25, minCount: 1, maxCount: 1 },
@@ -367,16 +234,9 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
   {
-    id: "9",
-    type: "POI_EVENT",
-    pos: [7, 25],
-    neighbors: ["D"],  // Dead end - only connects back to D
-    roomId: 'R_BACK',
-    nameRu: 'Мастерская',
-    nameEn: 'Backstage',
-    dangerLevel: 'medium',
-    dangerPercent: 30,
-    lootType: 'rare',
+    id: "9", type: "POI_EVENT", pos: [7, 25], neighbors: ["D"],
+    roomId: 'R_BACK', nameRu: 'Мастерская', nameEn: 'Backstage',
+    dangerLevel: 'medium', dangerPercent: 30, lootType: 'rare',
     possibleLoot: [
       { itemId: 'wrench', chance: 40, minCount: 1, maxCount: 1 },
       { itemId: 'spare_parts', chance: 50, minCount: 1, maxCount: 3 },
@@ -384,98 +244,50 @@ export const MAP_NODES_DATA: MapNodeData[] = [
     ]
   },
 
-  // ─────────────────────────────────────────────────────────────────────────────
   // WAYPOINT NODES - Промежуточные точки (A, B, D, G, V)
-  // ─────────────────────────────────────────────────────────────────────────────
   {
-    id: "D",
-    type: "WAYPOINT",
-    pos: [31, 18],
-    neighbors: ["1", "9", "8"],  // From 1, to 9 and 8 (removed G - path goes through 8)
-    roomId: 'R_MAIN',
-    nameRu: 'Перекрёсток Д',
-    nameEn: 'Junction D',
-    dangerLevel: 'medium',
-    dangerPercent: 35,
-    lootType: 'common',
+    id: "D", type: "WAYPOINT", pos: [31, 18], neighbors: ["1", "9", "8"],
+    roomId: 'R_MAIN', nameRu: 'Перекрёсток Д', nameEn: 'Junction D',
+    dangerLevel: 'medium', dangerPercent: 35, lootType: 'common',
     possibleLoot: [
       { itemId: 'flashlight', chance: 15, minCount: 1, maxCount: 1 },
       { itemId: 'batteries', chance: 30, minCount: 1, maxCount: 2 }
     ]
   },
   {
-    id: "G",
-    type: "WAYPOINT",
-    pos: [31, 45],
-    neighbors: ["8", "6"],  // From 8, to 6 (path comes from D->8->G)
-    roomId: 'R_MAIN',
-    nameRu: 'Перекрёсток Г',
-    nameEn: 'Junction G',
-    dangerLevel: 'medium',
-    dangerPercent: 40,
-    lootType: 'common',
+    id: "G", type: "WAYPOINT", pos: [31, 45], neighbors: ["8", "6"],
+    roomId: 'R_MAIN', nameRu: 'Перекрёсток Г', nameEn: 'Junction G',
+    dangerLevel: 'medium', dangerPercent: 40, lootType: 'common',
     possibleLoot: [
       { itemId: 'napkin', chance: 50, minCount: 1, maxCount: 5 },
       { itemId: 'coin', chance: 20, minCount: 1, maxCount: 3 }
     ]
   },
   {
-    id: "A",
-    type: "WAYPOINT",
-    pos: [59, 45],
-    neighbors: ["2", "3", "4", "5"],  // From 2, to 3 (dead end), 4 (dead end), and 5
-    roomId: 'R_MAIN',
-    nameRu: 'Перекрёсток А',
-    nameEn: 'Junction A',
-    dangerLevel: 'medium',
-    dangerPercent: 45,
-    lootType: 'common',
+    id: "A", type: "WAYPOINT", pos: [59, 45], neighbors: ["2", "3", "4", "5"],
+    roomId: 'R_MAIN', nameRu: 'Перекрёсток А', nameEn: 'Junction A',
+    dangerLevel: 'medium', dangerPercent: 45, lootType: 'common',
     possibleLoot: [
       { itemId: 'cupcake', chance: 25, minCount: 1, maxCount: 2 },
       { itemId: 'balloon', chance: 30, minCount: 1, maxCount: 1 }
     ]
   },
   {
-    id: "V",
-    type: "WAYPOINT",
-    pos: [31, 90],
-    neighbors: ["6", "Y"],  // From 6, to Y (Office west entrance)
-    roomId: 'R_WEST',
-    nameRu: 'Вход в офис (запад)',
-    nameEn: 'Office entrance (west)',
-    dangerLevel: 'high',
-    dangerPercent: 55,
-    lootType: 'common',
-    possibleLoot: []
+    id: "V", type: "WAYPOINT", pos: [31, 90], neighbors: ["6", "Y"],
+    roomId: 'R_WEST', nameRu: 'Вход в офис (запад)', nameEn: 'Office entrance (west)',
+    dangerLevel: 'high', dangerPercent: 55, lootType: 'common', possibleLoot: []
   },
   {
-    id: "B",
-    type: "WAYPOINT",
-    pos: [59, 90],
-    neighbors: ["5", "Y"],  // From 5, to Y (Office east entrance)
-    roomId: 'R_EAST',
-    nameRu: 'Вход в офис (восток)',
-    nameEn: 'Office entrance (east)',
-    dangerLevel: 'high',
-    dangerPercent: 55,
-    lootType: 'common',
-    possibleLoot: []
+    id: "B", type: "WAYPOINT", pos: [59, 90], neighbors: ["5", "Y"],
+    roomId: 'R_EAST', nameRu: 'Вход в офис (восток)', nameEn: 'Office entrance (east)',
+    dangerLevel: 'high', dangerPercent: 55, lootType: 'common', possibleLoot: []
   },
 
-  // ─────────────────────────────────────────────────────────────────────────────
   // LOOP_END - Конечная точка маршрута (Офис)
-  // ─────────────────────────────────────────────────────────────────────────────
   {
-    id: "Y",
-    type: "LOOP_END",
-    pos: [45, 90],
-    neighbors: ["V", "B"],  // Office endpoint - connects to both entrances
-    roomId: 'R_OFFICE',
-    nameRu: 'Офис',
-    nameEn: 'Office',
-    dangerLevel: 'extreme',
-    dangerPercent: 70,
-    lootType: 'rare',
+    id: "Y", type: "LOOP_END", pos: [45, 90], neighbors: ["V", "B"],
+    roomId: 'R_OFFICE', nameRu: 'Офис', nameEn: 'Office',
+    dangerLevel: 'extreme', dangerPercent: 70, lootType: 'rare',
     possibleLoot: [
       { itemId: 'security_badge', chance: 20, minCount: 1, maxCount: 1 },
       { itemId: 'tablet', chance: 10, minCount: 1, maxCount: 1 },
@@ -485,8 +297,12 @@ export const MAP_NODES_DATA: MapNodeData[] = [
   }
 ];
 
+// /END_ANCHOR:MAPDATA/NODES
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// ANIMATRONIC SPAWN ZONES - Допустимые узлы для каждого аниматроника
+// /START_ANCHOR:MAPDATA/ANIMATRONIC_SPAWNS
+// Допустимые узлы для каждого аниматроника
+// КОНТРАКТ: Все аниматроники могут появляться в офисе (Y)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export type AnimatronicType = 'foxy' | 'bonnie' | 'chica' | 'freddy';
@@ -500,56 +316,35 @@ export interface AnimatronicSpawnData {
 }
 
 export const ANIMATRONIC_SPAWNS: AnimatronicSpawnData[] = [
-  {
-    id: 'foxy',
-    nameRu: 'Фокси',
-    nameEn: 'Foxy',
-    color: '#EF4444',  // Red
-    allowedNodes: ['D', '8', 'G', '6', 'V']  // West corridor path
-  },
-  {
-    id: 'bonnie',
-    nameRu: 'Бонни',
-    nameEn: 'Bonnie',
-    color: '#3B82F6',  // Blue
-    allowedNodes: ['1', 'X', 'D', '9', 'G', '6', 'V']  // North/West paths
-  },
-  {
-    id: 'chica',
-    nameRu: 'Чика',
-    nameEn: 'Chica',
-    color: '#EAB308',  // Yellow
-    allowedNodes: ['1', 'X', '2', '3', '4', '5', 'A', 'B']  // East/Center paths
-  },
-  {
-    id: 'freddy',
-    nameRu: 'Фредди',
-    nameEn: 'Freddy',
-    color: '#92400E',  // Brown
-    allowedNodes: ['1', '9', '3', '4', 'B', '7', '2']  // Various locations
-  }
+  { id: 'foxy', nameRu: 'Фокси', nameEn: 'Foxy', color: '#EF4444',
+    allowedNodes: ['D', '8', 'G', '6', 'V'] },
+  { id: 'bonnie', nameRu: 'Бонни', nameEn: 'Bonnie', color: '#3B82F6',
+    allowedNodes: ['1', 'X', 'D', '9', 'G', '6', 'V'] },
+  { id: 'chica', nameRu: 'Чика', nameEn: 'Chica', color: '#EAB308',
+    allowedNodes: ['1', 'X', '2', '3', '4', '5', 'A', 'B'] },
+  { id: 'freddy', nameRu: 'Фредди', nameEn: 'Freddy', color: '#92400E',
+    allowedNodes: ['1', '9', '3', '4', 'B', '7', '2'] }
 ];
 
-// All animatronics can appear in Office (Y) - final location
 export const OFFICE_NODE_ID = 'Y';
 
-// Helper: check if animatronic can spawn at node
 export function canAnimatronicSpawnAt(animatronicId: AnimatronicType, nodeId: string): boolean {
-  if (nodeId === OFFICE_NODE_ID) return true;  // All can appear in Office
+  if (nodeId === OFFICE_NODE_ID) return true;
   const animatronic = ANIMATRONIC_SPAWNS.find(a => a.id === animatronicId);
   return animatronic?.allowedNodes.includes(nodeId) ?? false;
 }
 
-// Helper: get all animatronics that can spawn at a node
 export function getAnimatronicsForNode(nodeId: string): AnimatronicType[] {
   if (nodeId === OFFICE_NODE_ID) return ['foxy', 'bonnie', 'chica', 'freddy'];
-  return ANIMATRONIC_SPAWNS
-    .filter(a => a.allowedNodes.includes(nodeId))
-    .map(a => a.id);
+  return ANIMATRONIC_SPAWNS.filter(a => a.allowedNodes.includes(nodeId)).map(a => a.id);
 }
 
+// /END_ANCHOR:MAPDATA/ANIMATRONIC_SPAWNS
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// ROOM IMAGES - URL изображений комнат для камер
+// /START_ANCHOR:MAPDATA/ROOM_IMAGES
+// URL изображений комнат для камер
+// КОНТРАКТ: Ключи соответствуют id комнат из MAP_ROOMS
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const ROOM_IMAGES: Record<string, string> = {
@@ -568,8 +363,12 @@ export const ROOM_IMAGES: Record<string, string> = {
   'R_CLST': '/cameras/cam_closet.jpg',
 };
 
+// /END_ANCHOR:MAPDATA/ROOM_IMAGES
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// DANGER & LOOT STYLING
+// /START_ANCHOR:MAPDATA/DANGER_STYLING
+// Стилизация уровней опасности и типов лута (Tailwind классы)
+// КОНТРАКТ: Ключи соответствуют DangerLevel и LocationLootType из types.ts
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const DANGER_COLORS: Record<DangerLevel, { bg: string; text: string; border: string }> = {
@@ -594,8 +393,11 @@ export const LOOT_TYPE_COLORS: Record<LocationLootType, string> = {
   supplies: 'text-blue-400'
 };
 
+// /END_ANCHOR:MAPDATA/DANGER_STYLING
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER FUNCTIONS
+// /START_ANCHOR:MAPDATA/HELPER_FUNCTIONS
+// Вспомогательные функции для работы с картой
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export function getNodeById(nodeId: string): MapNodeData | undefined {
@@ -618,3 +420,5 @@ export function getJointBetweenRooms(roomId1: string, roomId2: string): MapJoint
     (j.from === roomId2 && j.to === roomId1)
   );
 }
+
+// /END_ANCHOR:MAPDATA/HELPER_FUNCTIONS
