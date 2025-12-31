@@ -31,7 +31,6 @@ import { getItemById } from '@/lib/itemData';
 import TabbedPanel from '@/components/TabbedPanel';
 import GameMap from '@/components/GameMap';
 import CameraView from '@/components/CameraView';
-import CombatEncounter from '@/components/CombatEncounter';
 import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
 import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
@@ -160,9 +159,8 @@ export default function GameBoard() {
   }, [addLogEntry]);
 
   // Хук игры
-  const { player, allPlayers, enemies, isCombat, loading } = useGame(GAME_ID, playerId || '');
+  const { player, allPlayers, enemies, loading } = useGame(GAME_ID, playerId || '');
 
-  const combatEnemy = enemies.find(e => e.currentNode === player?.currentNode);
   const isCheckingTurn = useRef(false);
 
   // Проверка одновременных ходов
@@ -218,14 +216,12 @@ export default function GameBoard() {
     .filter(e => e.currentNode === player?.currentNode)
     .map(e => e.type);
 
-  // Конвертируем данные для совместимости
+  // Конвертируем данные для совместимости (аниматроники бессмертны)
   const animatronicsForPanel: AnimatronicState[] = enemies.map(e => ({
     id: e.id,
     type: e.type,
     name: e.type,
     currentNode: e.currentNode,
-    hp: e.hp,
-    maxHp: 100,
     damage: 15,
     moveChance: 40,
     aggressionLevel: 5
@@ -324,11 +320,15 @@ export default function GameBoard() {
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
     if (!encounter || !playerId) return;
 
+    // Сохраняем данные о перемещении до любых async операций
+    const pendingMoveId = encounter.pendingMove?.id;
+    const staminaCost = encounter.staminaCost;
+
     if (result.evaded) {
       addLogEntry(`Уклонение от ${result.animatronicName}! (бросок: ${result.diceRoll})`, 'combat');
-      // Перемещаемся только если есть pendingMove (т.е. ещё не переместились)
-      if (encounter.pendingMove) {
-        await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+      // Перемещаемся при успешном уклонении
+      if (pendingMoveId) {
+        await executeMove(pendingMoveId, staminaCost);
       }
     } else {
       const actionText = result.action === 'retreat' ? 'отступил с' :
@@ -341,11 +341,10 @@ export default function GameBoard() {
         addLogEntry(`Отступление на предыдущую позицию`, 'move');
         // При отступлении остаёмся на месте (previousNode)
       } else {
-        // Перемещаемся только если есть pendingMove (т.е. ещё не переместились)
-        // И если staminaCost > 0, значит выносливость ещё не была обнулена колесом
-        if (encounter.pendingMove) {
-          // Выносливость уже обнулена колесом (onStaminaReset), не списываем снова
-          await executeMove(encounter.pendingMove.id, encounter.staminaCost, true);
+        // ВСЕГДА перемещаемся после получения урона (если не отступаем)
+        // Выносливость уже обнулена колесом (onStaminaReset), не списываем снова
+        if (pendingMoveId) {
+          await executeMove(pendingMoveId, staminaCost, true);
         }
       }
     }
@@ -553,16 +552,6 @@ export default function GameBoard() {
           playerStealth={player?.stats?.stealth ?? DEFAULT_STATS.stealth}
           onComplete={handleEncounterComplete}
           onStaminaReset={handleStaminaReset}
-        />
-      )}
-
-      {/* Оверлей боя */}
-      {isCombat && combatEnemy && !encounter?.active && (
-        <CombatEncounter
-          gameId={GAME_ID}
-          playerId={playerId}
-          enemyId={combatEnemy.id}
-          enemyHp={combatEnemy.hp}
         />
       )}
 

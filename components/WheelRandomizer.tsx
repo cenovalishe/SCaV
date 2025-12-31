@@ -244,13 +244,22 @@ export default function WheelRandomizer({
 
     const targetAngle = getAngleForValue(result);
     const spins = 6 + Math.floor(Math.random() * 4);
-    // Корректировка: колесо вращается по часовой стрелке, стрелка сверху
-    // Чтобы сегмент оказался под стрелкой, нужно повернуть колесо так,
-    // чтобы центр сегмента оказался на 0 градусов (вверху)
-    // Сегменты рисуются начиная сверху (смещение -90° уже в отрисовке)
-    const finalRotation = spins * 360 + targetAngle;
 
-    setRotation(prev => prev + finalRotation);
+    // Корректировка: учитываем текущую позицию колеса при респине
+    // targetFinalAngle - это угол, на котором должно остановиться колесо (сегмент под стрелкой)
+    const targetFinalAngle = 360 - targetAngle;
+
+    setRotation(prev => {
+      // Текущий визуальный угол колеса
+      const currentVisualAngle = prev % 360;
+      // Вычисляем, сколько нужно докрутить от текущей позиции до целевой
+      let delta = targetFinalAngle - currentVisualAngle;
+      // Нормализуем delta чтобы всегда крутить вперёд (по часовой)
+      if (delta < 0) delta += 360;
+      // Добавляем полные обороты + delta
+      const finalRotation = spins * 360 + delta;
+      return prev + finalRotation;
+    });
   }, [isSpinning]);
 
   useEffect(() => {
