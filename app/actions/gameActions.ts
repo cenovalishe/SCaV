@@ -58,11 +58,17 @@ import { FieldValue } from 'firebase-admin/firestore';
 // КОНТРАКТ: success=true означает успешное выполнение операции
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// [PATCH] Добавлено поле collision для обработки столкновений с врагами
 type MoveResponse = {
   success: boolean;
   message: string;
   event?: string;
   loot?: string;
+  collision?: {
+    hasCollision: boolean;
+    enemyId?: string;
+    enemyType?: string;
+  };
 };
 
 // /END_ANCHOR:GAMEACTIONS/TYPES
