@@ -296,7 +296,7 @@ export default function WheelRandomizer({
     : '#fff';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/98">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/98 gap-8">
       {/* Анимированный фон */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-red-950/50 via-black to-purple-950/30" />
@@ -554,21 +554,40 @@ export default function WheelRandomizer({
           </div>
         )}
 
-        {/* Информация о весах */}
-        <div className="absolute bottom-6 left-6 right-6">
-          <div className="flex justify-center gap-2 flex-wrap text-[10px] font-mono text-white/20">
-            {WHEEL_VALUES.map(v => (
-              <span key={v.value} className="flex items-center gap-1 px-2 py-1 bg-black/30 rounded">
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: v.color, boxShadow: `0 0 5px ${v.color}` }}
-                />
-                <span className="text-white/40">{v.value}</span>
-                <span className="text-white/20">({v.weight}%)</span>
-              </span>
-            ))}
-          </div>
+      </div>
+
+      {/* Легенда справа от колеса */}
+      <div className="relative z-10 flex flex-col gap-1.5 p-4 bg-black/60 border border-white/10 rounded-xl max-h-[400px] overflow-y-auto">
+        <div className="text-white/50 font-mono text-xs uppercase tracking-wider mb-2 text-center border-b border-white/10 pb-2">
+          📊 Шансы
         </div>
+        {WHEEL_VALUES.map(v => (
+          <div
+            key={v.value}
+            className="flex items-center gap-3 px-3 py-1.5 bg-black/40 hover:bg-black/60 rounded-lg transition-all"
+          >
+            <span
+              className="w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: v.color, boxShadow: `0 0 8px ${v.color}` }}
+            />
+            <span
+              className="font-mono text-lg font-bold w-6"
+              style={{ color: v.color }}
+            >
+              {v.value}
+            </span>
+            <div className="flex-1 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${(v.weight / WHEEL_VALUES[0].weight) * 100}%`,
+                  backgroundColor: v.color
+                }}
+              />
+            </div>
+            <span className="text-white/40 font-mono text-xs w-8 text-right">{v.weight}%</span>
+          </div>
+        ))}
       </div>
     </div>
   );

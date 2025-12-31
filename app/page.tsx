@@ -108,13 +108,13 @@ export default function GameBoard() {
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
 
-  // Функция добавления записи в лог
+  // Функция добавления записи в лог (полная история)
   const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
     setGameLog(prev => [...prev, {
       timestamp: Date.now(),
       message,
       type
-    }].slice(-50));
+    }]);
   }, []);
 
   // Инициализация игрока

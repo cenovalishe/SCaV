@@ -88,16 +88,17 @@ export default function LootRoulette({
 
   const ITEM_WIDTH = 100; // Ширина одного предмета
   const VISIBLE_ITEMS = 7; // Видимых предметов
-  const WINNING_INDEX = 35; // Индекс выигрышного предмета
+  const WINNING_INDEX_1 = 34; // Индекс первого выигрышного предмета (под левой стрелкой)
+  const WINNING_INDEX_2 = 36; // Индекс второго выигрышного предмета (под правой стрелкой, через 1)
 
   // Инициализация
   useEffect(() => {
     const items = generateRouletteItems(possibleItems, 50);
     const winners = selectWinningItems(possibleItems);
 
-    // Вставляем выигрышные предметы на нужные позиции
-    if (winners[0]) items[WINNING_INDEX] = winners[0];
-    if (winners[1]) items[WINNING_INDEX + 1] = winners[1];
+    // Вставляем выигрышные предметы на нужные позиции (через 1 предмет)
+    if (winners[0]) items[WINNING_INDEX_1] = winners[0];
+    if (winners[1]) items[WINNING_INDEX_2] = winners[1];
 
     setRouletteItems(items);
     setWinningItems(winners);
@@ -107,8 +108,10 @@ export default function LootRoulette({
   const startSpin = useCallback(() => {
     setPhase('spinning');
 
-    // Целевой offset чтобы выигрышный предмет был в центре
-    const targetOffset = (WINNING_INDEX - Math.floor(VISIBLE_ITEMS / 2)) * ITEM_WIDTH;
+    // Целевой offset чтобы выигрышные предметы были под стрелками
+    // Левая стрелка над WINNING_INDEX_1, правая стрелка над WINNING_INDEX_2
+    const centerIndex = (WINNING_INDEX_1 + WINNING_INDEX_2) / 2; // 35 - центр между двумя предметами
+    const targetOffset = (centerIndex - Math.floor(VISIBLE_ITEMS / 2)) * ITEM_WIDTH;
 
     // Анимация
     let startTime: number;
@@ -190,8 +193,8 @@ export default function LootRoulette({
               drop-shadow-[0_0_10px_rgba(251,191,36,0.8)]" />
           </div>
 
-          {/* Второй указатель (для второго предмета) */}
-          <div className="absolute top-0 z-20" style={{ left: `calc(50% + ${ITEM_WIDTH / 2}px)`, transform: 'translateX(-50%) translateY(-8px)' }}>
+          {/* Второй указатель (для второго предмета - через один предмет вправо) */}
+          <div className="absolute top-0 z-20" style={{ left: `calc(50% + ${ITEM_WIDTH}px)`, transform: 'translateX(-50%) translateY(-8px)' }}>
             <div className="w-0 h-0 border-l-[15px] border-l-transparent border-r-[15px] border-r-transparent border-t-[25px] border-t-orange-400
               drop-shadow-[0_0_10px_rgba(249,115,22,0.8)]" />
           </div>
@@ -206,6 +209,7 @@ export default function LootRoulette({
 
             {/* Линия победителя */}
             <div className="absolute top-0 bottom-0 left-1/2 w-px bg-amber-400/50 z-10" />
+            {/* Вторая линия победителя (через один предмет) */}
             <div className="absolute top-0 bottom-0 z-10"
               style={{ left: `calc(50% + ${ITEM_WIDTH}px)`, width: '1px', background: 'rgba(249, 115, 22, 0.5)' }} />
 
@@ -219,7 +223,7 @@ export default function LootRoulette({
             >
               {rouletteItems.map((item, idx) => {
                 const rarity = getItemRarity(item.value);
-                const isWinner = phase === 'result' && (idx === WINNING_INDEX || idx === WINNING_INDEX + 1);
+                const isWinner = phase === 'result' && (idx === WINNING_INDEX_1 || idx === WINNING_INDEX_2);
 
                 return (
                   <div

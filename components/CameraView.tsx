@@ -136,10 +136,10 @@ export default function CameraView({
               >
                 {/* Тень врага */}
                 <div className="w-32 h-48 bg-gradient-to-t from-black/90 to-transparent blur-xl animate-pulse" />
-                {/* Глаза */}
+                {/* Глаза - статичное свечение без анимации */}
                 <div className="absolute top-12 left-1/2 -translate-x-1/2 flex gap-6">
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-ping shadow-[0_0_20px_red]" />
-                  <div className="w-3 h-3 bg-red-500 rounded-full animate-ping shadow-[0_0_20px_red]" style={{ animationDelay: '0.1s' }} />
+                  <div className="w-4 h-4 bg-red-500 rounded-full shadow-[0_0_30px_red,0_0_60px_red]" />
+                  <div className="w-4 h-4 bg-red-500 rounded-full shadow-[0_0_30px_red,0_0_60px_red]" />
                 </div>
               </div>
             ))}

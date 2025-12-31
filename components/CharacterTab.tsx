@@ -58,9 +58,9 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
 
   return (
     <div className="h-full flex p-2 gap-3">
-      {/* ЛЕВАЯ ЧАСТЬ - Аватар (большой) */}
-      <div className="w-[45%] flex flex-col">
-        {/* Аватар контейнер */}
+      {/* ЛЕВАЯ ЧАСТЬ - Аватар (увеличенный) */}
+      <div className="w-[55%] flex flex-col">
+        {/* Аватар контейнер (занимает всю высоту) */}
         <div className="flex-1 relative border-2 border-purple-500/30 rounded-xl overflow-hidden bg-gradient-to-b from-purple-900/20 to-black">
           {/* Декоративная рамка */}
           <div className="absolute inset-0 pointer-events-none">
@@ -73,9 +73,9 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
           {/* Фон градиент */}
           <div className="absolute inset-0 bg-gradient-to-b from-purple-900/30 via-transparent to-black/50" />
 
-          {/* SVG Персонаж (placeholder для изображения) */}
+          {/* SVG Персонаж (увеличенный placeholder) */}
           <div className="absolute inset-0 flex items-center justify-center">
-            <svg viewBox="0 0 80 150" className="w-full h-full max-w-[120px] max-h-[200px]">
+            <svg viewBox="0 0 80 150" className="w-full h-full max-w-[180px] max-h-[280px]">
               <defs>
                 <filter id="glow-avatar">
                   <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
@@ -137,46 +137,6 @@ export default function CharacterTab({ stats, playerName }: CharacterTabProps) {
           </div>
         </div>
 
-        {/* HP/Stamina бары под аватаром */}
-        <div className="mt-2 space-y-2">
-          {/* HP */}
-          <div className="p-2 bg-gradient-to-r from-red-900/30 to-transparent border border-red-500/20 rounded-lg">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1">
-                <span className="text-base">❤️</span>
-                <span className="text-red-400 font-mono text-[10px] uppercase">HP</span>
-              </div>
-              <span className={`font-mono text-xs font-bold ${getHpBarColor(hpPercent).replace('bg-', 'text-')}`}>
-                {stats.hp}/{stats.maxHp}
-              </span>
-            </div>
-            <div className="h-2 bg-black/50 rounded-full overflow-hidden border border-white/10">
-              <div
-                className={`h-full transition-all duration-500 ${getHpBarColor(hpPercent)}`}
-                style={{ width: `${hpPercent}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Stamina */}
-          <div className="p-2 bg-gradient-to-r from-yellow-900/30 to-transparent border border-yellow-500/20 rounded-lg">
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-1">
-                <span className="text-base">⚡</span>
-                <span className="text-yellow-400 font-mono text-[10px] uppercase">ВЫНОСЛИВОСТЬ</span>
-              </div>
-              <span className="text-yellow-400 font-mono text-xs font-bold">
-                {stats.stamina}/{stats.maxStamina}
-              </span>
-            </div>
-            <div className="h-2 bg-black/50 rounded-full overflow-hidden border border-white/10">
-              <div
-                className="h-full bg-gradient-to-r from-yellow-600 to-yellow-400 transition-all duration-500"
-                style={{ width: `${staminaPercent}%` }}
-              />
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* ПРАВАЯ ЧАСТЬ - Характеристики (одна колонка) */}

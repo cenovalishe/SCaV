@@ -71,8 +71,8 @@ const BAG_SLOTS: SlotConfig[] = [
   { size: '1x1', index: 2 },
 ];
 
-// Базовый размер единичного слота
-const SLOT_BASE_SIZE = 36; // px
+// Базовый размер единичного слота (увеличен)
+const SLOT_BASE_SIZE = 48; // px
 const SLOT_GAP = 4; // px
 
 // Компонент слота с переменным размером
@@ -189,8 +189,8 @@ function CompactEquipmentSlot({
   const item = itemId ? getItemById(itemId) : null;
 
   const sizes = {
-    small: { dim: 'w-9 h-9', icon: 'text-lg', label: 'text-[7px]' },
-    normal: { dim: 'w-11 h-11', icon: 'text-xl', label: 'text-[8px]' },
+    small: { dim: 'w-11 h-11', icon: 'text-xl', label: 'text-[8px]' },
+    normal: { dim: 'w-14 h-14', icon: 'text-2xl', label: 'text-[9px]' },
   };
 
   const s = sizes[size];
@@ -440,7 +440,7 @@ export default function InventoryTab({
           />
 
           {/* Карманы */}
-          <div className="flex gap-1 flex-wrap w-[78px]">
+          <div className="flex gap-1 flex-wrap w-[96px]">
             {[0, 1, 2, 3].map(i => (
               <CompactEquipmentSlot
                 key={i}
