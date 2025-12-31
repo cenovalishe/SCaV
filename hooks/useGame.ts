@@ -94,14 +94,12 @@ export type PlayerState = {
   inventory: string[];
 };
 
-// [PATCH] Удален параметр hp у аниматроников
+// Аниматроники бессмертны - без HP
 export type EnemyState = {
   id: string;
   currentNode: string;
   type: string;
-  hp: number;      // <--- ОБЯЗАТЕЛЬНО: Это поле должно быть здесь
-  maxHp?: number;  // Рекомендуется добавить (так как оно есть в базе)
-  damage?: number; // Рекомендуется добавить
+  damage?: number;
 };
 
 // /END_ANCHOR:USEGAME/TYPES
@@ -147,9 +145,7 @@ export function useGame(gameId: string, playerId: string) {
     };
   }, [gameId, playerId]);
 
-  const isCombat = player?.status === 'IN_COMBAT';
-
-  return { player, allPlayers, enemies, isCombat, loading };
+  return { player, allPlayers, enemies, loading };
 }
 
 // /END_ANCHOR:USEGAME/HOOK

@@ -256,8 +256,8 @@ export interface NodeInfo {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // /START_ANCHOR:TYPES/ANIMATRONICS
-// Состояние аниматроников (враги)
-// КОНТРАКТ: hp <= maxHp, moveChance 0-100, aggressionLevel определяет поведение
+// Состояние аниматроников (враги) - БЕССМЕРТНЫ, без HP
+// КОНТРАКТ: moveChance 0-100, aggressionLevel определяет поведение
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export interface AnimatronicState {
@@ -265,8 +265,6 @@ export interface AnimatronicState {
   type: string;           // Freddy, Bonnie, Chica, Foxy
   name: string;
   currentNode: string;
-  hp: number;
-  maxHp: number;
   damage: number;
   moveChance: number;     // Шанс перемещения (0-100)
   aggressionLevel: number;

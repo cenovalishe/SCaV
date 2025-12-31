@@ -129,8 +129,8 @@ export default function InfoTab({
                         <div className="text-[10px] opacity-60">{a.type}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-mono text-xs">
-                          ❤️ {a.hp}/{a.maxHp}
+                        <div className="font-mono text-xs text-red-400/70">
+                          ♾️ БЕССМЕРТЕН
                         </div>
                       </div>
                     </div>

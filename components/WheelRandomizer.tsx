@@ -247,8 +247,8 @@ export default function WheelRandomizer({
     // Корректировка: колесо вращается по часовой стрелке, стрелка сверху
     // Чтобы сегмент оказался под стрелкой, нужно повернуть колесо так,
     // чтобы центр сегмента оказался на 0 градусов (вверху)
-    // Сегменты рисуются начиная сверху (смещение -90° уже в отрисовке)
-    const finalRotation = spins * 360 + targetAngle;
+    // Для этого нужно вычесть targetAngle (или добавить 360 - targetAngle)
+    const finalRotation = spins * 360 + (360 - targetAngle);
 
     setRotation(prev => prev + finalRotation);
   }, [isSpinning]);

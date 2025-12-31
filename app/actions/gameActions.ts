@@ -611,22 +611,20 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
       return { success: true, spawned: false, message: 'Enemies already exist' };
     }
 
-    // Создаем врагов используя данные из ANIMATRONIC_SPAWNS
+    // Создаем врагов используя данные из ANIMATRONIC_SPAWNS (бессмертные, без HP)
     const batch = dbAdmin.batch();
 
     for (const animatronic of ANIMATRONIC_SPAWNS) {
       const docRef = enemiesRef.doc(animatronic.id);
       batch.set(docRef, {
         id: animatronic.id,
-        type: animatronic.id,       // ИСПРАВЛЕНО: используем id (или nameEn) вместо name
-        name: animatronic.nameRu,   // ДОБАВЛЕНО: поле name обязательно для AnimatronicState
-        currentNode: animatronic.allowedNodes[0], // ИСПРАВЛЕНО: startNode нет, берем первый разрешенный узел
-        hp: 100,                    // ДОБАВЛЕНО: обязательные поля для AnimatronicState
-        maxHp: 100,
+        type: animatronic.id,
+        name: animatronic.nameRu,
+        currentNode: animatronic.allowedNodes[0],
         damage: 10,
         moveChance: 50,
         aggressionLevel: 1,
-        color: animatronic.color    // В mapData свойство color уже есть, функция не нужна
+        color: animatronic.color
       });
     }
 
