@@ -200,10 +200,11 @@ export interface PlayerState {
   status: 'IDLE' | 'MOVING' | 'IN_COMBAT' | 'DEAD' | 'LOOTING' | 'IN_OFFICE';
   stats: CharacterStats;
   equipment: Equipment;
-  inventory: string[];    // Legacy поле для совместимости
-  roubles: number;        // Очки (рубли)
-  turnActions: number;    // Оставшиеся действия в ходу
+  inventory: string[];
+  roubles: number;
+  turnActions: number;
   gameLog: GameLogEntry[];
+  currentEnemyId?: string | null; // <--- ДОБАВЛЕНО: ID текущего врага
 }
 
 // /END_ANCHOR:TYPES/PLAYER_STATE
