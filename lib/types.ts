@@ -126,19 +126,25 @@ export type EquipmentSlotType =
 
 export type ContainerType = 'rig' | 'bag' | 'backpack';
 
-// Структура ячейки в слоте 2x2 (каждый слот 2x2 = 4 подъячейки 1x1)
+// Структура ячейки в слоте
 // Индексы подъячеек в слоте 2x2:
-// [0][1]
-// [2][3]
+// [0][1] (y=0)
+// [2][3] (y=1)
+//
+// Индексы подъячеек в слоте 1x2:
+// [0] (y=0)
+// [1] (y=1)
 export interface SubCell {
   itemId: string | null;      // ID предмета в этой подъячейке
-  masterCell?: number;        // Если предмет занимает несколько ячеек - индекс "мастер" ячейки
+  masterCell?: number;        // Если предмет занимает несколько ячеек - индекс "мастер" ячейки (левый верхний угол предмета)
+  isOccupied?: boolean;       // Флаг, занята ли ячейка частью большого предмета
 }
 
 // Конфигурация слота контейнера
 export interface ContainerSlotConfig {
-  size: '1x1' | '2x1' | '2x2';
-  subCells?: SubCell[];       // Для 2x2 слотов - 4 подъячейки
+  // Добавлен тип '1x2' для вертикальных карманов
+  size: '1x1' | '1x2' | '2x1' | '2x2'; 
+  subCells?: SubCell[];       
 }
 
 export interface Container {
@@ -165,13 +171,17 @@ export interface Item {
   name: string;
   nameRu: string;
   type: 'consumable' | 'equipment' | 'weapon' | 'attachment' | 'valuable' | 'key';
-  value: number;       // Ценность в рублях
-  size: number;        // Размер в слотах (1, 2, 3...)
-  icon: string;        // Эмодзи или путь к иконке
+  value: number;
+  
+  // ИЗМЕНЕНИЕ: Заменяем абстрактный size на конкретные измерения
+  width: number;       // Ширина в ячейках (по горизонтали)
+  height: number;      // Высота в ячейках (по вертикали)
+  size?: number;       // (Legacy) Можно оставить как геттер или total slots (w*h)
+  
+  icon: string;
   effects?: ItemEffect[];
   stackable?: boolean;
   maxStack?: number;
-  // Модификаторы статов при экипировке (passive bonuses)
   statModifiers?: Partial<Record<keyof CharacterStats, number>>;
 }
 
