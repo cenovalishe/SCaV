@@ -84,7 +84,7 @@ import { Item, CharacterStats, Equipment } from './types';
 
 export const ITEMS: Record<string, Item> = {
   // ─────────────────────────────────────────────────────────────────────────────
-  // CONSUMABLE - Расходники (восстановление hp/stamina)
+  // 1x1 ITEMS (Расходники, мелкие предметы)
   // ─────────────────────────────────────────────────────────────────────────────
   medkit: {
     id: 'medkit',
@@ -92,7 +92,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Аптечка',
     type: 'consumable',
     value: 3500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🩹',
     effects: [{ stat: 'hp', value: 30, type: 'add' }]
   },
@@ -102,7 +102,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Бинт',
     type: 'consumable',
     value: 500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🩹',
     effects: [{ stat: 'hp', value: 10, type: 'add' }]
   },
@@ -112,7 +112,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Обезболивающее',
     type: 'consumable',
     value: 1200,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '💊',
     effects: [{ stat: 'hp', value: 5, type: 'add' }]
   },
@@ -122,7 +122,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Еда',
     type: 'consumable',
     value: 800,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🍕',
     effects: [{ stat: 'stamina', value: 2, type: 'add' }]
   },
@@ -132,7 +132,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Газировка',
     type: 'consumable',
     value: 400,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🥤',
     effects: [{ stat: 'stamina', value: 1, type: 'add' }]
   },
@@ -142,7 +142,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Адреналин',
     type: 'consumable',
     value: 5000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '💉',
     effects: [
       { stat: 'speed', value: 2, type: 'add' },
@@ -155,7 +155,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Кусок пиццы',
     type: 'consumable',
     value: 600,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🍕',
     effects: [{ stat: 'stamina', value: 1, type: 'add' }]
   },
@@ -165,7 +165,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Кекс',
     type: 'consumable',
     value: 800,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧁',
     effects: [{ stat: 'stamina', value: 1, type: 'add' }]
   },
@@ -175,7 +175,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Батарейки',
     type: 'consumable',
     value: 300,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🔋',
     stackable: true,
     maxStack: 4
@@ -190,7 +190,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Золотой Фредди',
     type: 'valuable',
     value: 50000,
-    size: 2,
+    width: 2, height: 2, size: 2, // 1x1
     icon: '🧸'
   },
   purple_guy_note: {
@@ -199,7 +199,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Записка Фиолетового',
     type: 'valuable',
     value: 100000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '📜'
   },
 
@@ -212,7 +212,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Золотой кекс',
     type: 'valuable',
     value: 35000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧁'
   },
   foxy_plush: {
@@ -221,7 +221,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Плюшевый Фокси',
     type: 'valuable',
     value: 25000,
-    size: 2,
+    width: 2, height: 2, size: 2, // 1x1
     icon: '🦊'
   },
   treasure_map: {
@@ -230,7 +230,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Карта сокровищ',
     type: 'valuable',
     value: 15000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🗺️'
   },
   old_tape: {
@@ -239,7 +239,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Старая кассета',
     type: 'valuable',
     value: 20000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '📼'
   },
   secret_note: {
@@ -248,7 +248,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Секретная записка',
     type: 'valuable',
     value: 18000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '📝'
   },
 
@@ -261,7 +261,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Бейдж охранника',
     type: 'valuable',
     value: 8000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🪪'
   },
   tablet: {
@@ -270,7 +270,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Планшет',
     type: 'valuable',
     value: 12000,
-    size: 2,
+    width: 2, height: 2, size: 1, // 1x1
     icon: '📱'
   },
   phone: {
@@ -279,7 +279,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Телефон',
     type: 'valuable',
     value: 6000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '📞'
   },
   microphone: {
@@ -288,7 +288,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Микрофон',
     type: 'valuable',
     value: 4500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🎤'
   },
   guitar: {
@@ -297,7 +297,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Гитара',
     type: 'valuable',
     value: 7500,
-    size: 3,
+    width: 1, height: 2, size: 2, // 1x1
     icon: '🎸'
   },
   hook: {
@@ -306,7 +306,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Крюк',
     type: 'valuable',
     value: 5500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🪝'
   },
   eyepatch: {
@@ -315,7 +315,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Повязка на глаз',
     type: 'valuable',
     value: 3000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🏴‍☠️'
   },
   spare_parts: {
@@ -324,7 +324,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Запчасти',
     type: 'valuable',
     value: 2500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '⚙️',
     stackable: true,
     maxStack: 5
@@ -335,7 +335,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Праздничный колпак',
     type: 'valuable',
     value: 1500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🎉'
   },
 
@@ -348,7 +348,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Салфетка',
     type: 'valuable',
     value: 50,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧻',
     stackable: true,
     maxStack: 10
@@ -359,7 +359,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Монета',
     type: 'valuable',
     value: 100,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🪙',
     stackable: true,
     maxStack: 10
@@ -370,7 +370,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Воздушный шар',
     type: 'valuable',
     value: 200,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🎈'
   },
   toilet_paper: {
@@ -379,7 +379,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Туалетная бумага',
     type: 'valuable',
     value: 150,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧻',
     stackable: true,
     maxStack: 5
@@ -390,7 +390,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Мыло',
     type: 'valuable',
     value: 250,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧼'
   },
   poster: {
@@ -399,7 +399,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Постер',
     type: 'valuable',
     value: 400,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🖼️'
   },
   newspaper: {
@@ -408,7 +408,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Газета',
     type: 'valuable',
     value: 300,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '📰'
   },
   cleaning_supplies: {
@@ -417,7 +417,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Моющие средства',
     type: 'valuable',
     value: 700,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧹'
   },
 
@@ -430,7 +430,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Фонарик',
     type: 'equipment',
     value: 2000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🔦',
     statModifiers: { stealth: 2 } // Освещает путь - лучше видишь врагов
   },
@@ -440,7 +440,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Гаечный ключ',
     type: 'equipment',
     value: 1800,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🔧',
     statModifiers: { attack: 1, defense: 1 } // Можно использовать как оружие
   },
@@ -454,7 +454,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Шлем охранника',
     type: 'equipment',
     value: 5000,
-    size: 2,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '⛑️',
     statModifiers: { defense: 2, maxHp: 10 }
   },
@@ -464,7 +464,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Бронежилет охранника',
     type: 'equipment',
     value: 8000,
-    size: 3,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🦺',
     statModifiers: { defense: 3, speed: -1 }
   },
@@ -474,7 +474,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Прибор ночного видения',
     type: 'equipment',
     value: 12000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🥽',
     statModifiers: { stealth: 3, luck: 1 }
   },
@@ -484,7 +484,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Кроссовки',
     type: 'equipment',
     value: 3000,
-    size: 2,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '👟',
     statModifiers: { speed: 2, stealth: 1 }
   },
@@ -494,7 +494,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Тактические перчатки',
     type: 'equipment',
     value: 2500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🧤',
     statModifiers: { attack: 1, luck: 1 }
   },
@@ -504,7 +504,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Большой рюкзак',
     type: 'equipment',
     value: 6000,
-    size: 4,
+    width: 2, height: 2, size: 1, // 1x1
     icon: '🎒',
     statModifiers: { capacity: 10, speed: -1 }
   },
@@ -514,7 +514,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Талисман удачи',
     type: 'equipment',
     value: 4000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🍀',
     statModifiers: { luck: 3 }
   },
@@ -528,7 +528,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Кухонный нож',
     type: 'weapon',
     value: 3500,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🔪',
     statModifiers: { attack: 3, speed: 1 }
   },
@@ -538,7 +538,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Сковорода',
     type: 'weapon',
     value: 2000,
-    size: 2,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🍳',
     statModifiers: { attack: 2, defense: 2 }
   },
@@ -548,7 +548,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Бейсбольная бита',
     type: 'weapon',
     value: 4000,
-    size: 2,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🏏',
     statModifiers: { attack: 4 }
   },
@@ -562,7 +562,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Ключ-карта',
     type: 'key',
     value: 10000,
-    size: 1,
+    width: 1, height: 1, size: 1, // 1x1
     icon: '🗝️'
   }
 };
