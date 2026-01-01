@@ -33,6 +33,24 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FILE MANIFEST: app/page.tsx
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * PURPOSE: Главная страница игры SCaV (REDESIGNED v2.2)
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ FEATURES v2.2                                                               │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ - FIX: Исправлена ошибка типов в handleEncounterComplete (result.survived) │
+ * │ - Логика выживания перенесена на клиент (проверка результата applyDamage)  │
+ * │ - Night Cycle UI интегрирован в CameraView (HUD)                           │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -47,7 +65,7 @@ import {
   createPlayerInSlot, 
   respawnEnemiesIfNeeded, 
   handleAnimatronicDefeat,
-  movePlayer // ★ ДОБАВЛЕНО: Исправлен пропущенный импорт
+  movePlayer 
 } from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
@@ -64,7 +82,6 @@ import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 import OfficeMechanic from '@/components/OfficeMechanic';
 import PlayerInspectModal from '@/components/PlayerInspectModal';
-// NightCycleDisplay теперь импортируется внутри CameraView, но инициализация нужна здесь
 import { initializeNightCycle } from '@/app/actions/nightCycleActions';
 
 // Дефолтные значения
@@ -375,7 +392,7 @@ export default function GameBoard() {
     setSelectedNode(node);
   }, []);
 
-  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ (Восстановлена логика)
+  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ
   const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
     if (!playerId) return;
 
@@ -397,7 +414,6 @@ export default function GameBoard() {
         
         // 3. Обработка особых событий после перемещения
         if (result.event === 'ENEMY_ENCOUNTER' && result.collision?.hasCollision) {
-           // Если сервер обнаружил врага (например, он пришел в эту же точку одновременно)
            addLogEntry(`⚠️ ВНЕЗАПНАЯ ВСТРЕЧА: ${result.collision.enemyType}!`, 'combat');
         }
       } else {
@@ -418,7 +434,7 @@ export default function GameBoard() {
     }
   }, [playerId, equipment, addLogEntry]);
 
-  // ★ ЗАПРОС ПЕРЕМЕЩЕНИЯ ОТ UI (Восстановлена логика)
+  // ★ ЗАПРОС ПЕРЕМЕЩЕНИЯ ОТ UI
   const handleMoveRequest = useCallback(async (targetNode: MapNodeData, staminaCost: number) => {
     if (!playerId || !player) return;
 
@@ -446,18 +462,42 @@ export default function GameBoard() {
     }
   }, [playerId, player, currentStamina, enemies, addLogEntry, executeMove]);
 
-  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ (Восстановлена логика)
+  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ (ИСПРАВЛЕННО)
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
      if (!encounter || !playerId) return;
      
-     if (result.survived) {
-       addLogEntry(`Вы пережили встречу с ${encounter.enemyName}!`, 'combat');
-       // Если выжили - продолжаем движение в целевую точку
-       if (encounter.pendingMove) {
+     let isDead = false;
+
+     // 1. Применяем урон, если он есть
+     if (result.damageReceived > 0) {
+       // Вызываем server action для нанесения урона
+       const damageResult = await applyDamage(GAME_ID, playerId, result.damageReceived);
+       if (damageResult.success) {
+         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+         // Получаем статус "побежден ли игрок" от сервера
+         isDead = !!damageResult.isDefeated;
+       }
+     }
+
+     // 2. Логика в зависимости от статуса (жив/мертв)
+     if (!isDead) {
+       if (result.evaded) {
+         addLogEntry(`Вы уклонились от ${encounter.enemyName}!`, 'combat');
+       } else {
+         addLogEntry(`Вы пережили атаку ${encounter.enemyName}!`, 'combat');
+       }
+
+       // Если игрок выбрал "Отступить" в колесе (если такая опция есть)
+       if (result.retreated) {
+         addLogEntry('Вы отступили назад.', 'combat');
+         // Не двигаемся в целевую точку
+       } 
+       // Если мы выжили и не отступаем - завершаем движение
+       else if (encounter.pendingMove) {
          await executeMove(encounter.pendingMove.id, encounter.staminaCost);
        }
      } else {
-       // Если проиграли - серверная обработка поражения
+       // Если игрок погиб
        addLogEntry('💀 Вы были схвачены...', 'combat');
        await handleAnimatronicDefeat(GAME_ID, playerId);
      }
@@ -491,7 +531,7 @@ export default function GameBoard() {
     }
   }, [playerId, addLogEntry]);
 
-  // ★ ЛУТИНГ (Восстановлена логика)
+  // ★ ЛУТИНГ
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
     setIsLooting(true);
