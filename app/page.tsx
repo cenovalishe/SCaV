@@ -37,7 +37,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, updateStamina, applyDamage, lootLocation, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded, handleAnimatronicDefeat } from '@/app/actions/gameActions';
+import { getOrCreatePlayer, updateStamina, applyDamage, lootLocation, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded, handleAnimatronicDefeat, updateEquipment } from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
@@ -261,6 +261,13 @@ export default function GameBoard() {
     }
   }, [playerId, loading, allPlayers, addLogEntry]);
 
+  // ★ Синхронизация equipment из Firebase (player.equipment)
+  useEffect(() => {
+    if (player && (player as any).equipment) {
+      setEquipment((player as any).equipment);
+    }
+  }, [player]);
+
   // Данные текущего узла
   const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
 
@@ -441,14 +448,42 @@ export default function GameBoard() {
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
     setIsLooting(true);
-    // ... [Original loot logic]
-    // ...
+
+    try {
+      const result = await lootLocation(GAME_ID, playerId);
+
+      if (result.success) {
+        if (result.items && result.items.length > 0) {
+          // Показываем найденные предметы
+          const itemNames = result.items.map(id => {
+            const item = getItemById(id);
+            return item ? item.nameRu : id;
+          }).join(', ');
+          addLogEntry(`🎁 Найдено: ${itemNames}`, 'loot');
+        } else {
+          addLogEntry(result.message || 'Ничего не найдено', 'loot');
+        }
+
+        if (result.droppedItems && result.droppedItems.length > 0) {
+          addLogEntry(`⚠️ Не поместилось: ${result.droppedItems.length} предметов`, 'loot');
+        }
+      } else {
+        addLogEntry(result.message || 'Ошибка при обыске', 'system');
+      }
+    } catch (error) {
+      console.error('Loot error:', error);
+      addLogEntry('Ошибка при обыске локации', 'system');
+    }
+
     setIsLooting(false);
   }, [playerId, isLooting, addLogEntry]);
 
   const handleLootRouletteComplete = useCallback((items: { id: string; nameRu: string }[]) => {
-      // ... [Original roulette logic]
-      setLootRoulette(null);
+    if (items.length > 0) {
+      const itemNames = items.map(i => i.nameRu).join(', ');
+      addLogEntry(`🎁 Получено: ${itemNames}`, 'loot');
+    }
+    setLootRoulette(null);
   }, [addLogEntry]);
 
   const handleWait = useCallback(async () => {
@@ -457,9 +492,13 @@ export default function GameBoard() {
     await updateStamina(GAME_ID, playerId, -currentStamina);
   }, [playerId, currentStamina, addLogEntry]);
 
-  const handleEquipmentChange = useCallback((newEquipment: Equipment) => {
+  const handleEquipmentChange = useCallback(async (newEquipment: Equipment) => {
     setEquipment(newEquipment);
-  }, []);
+    // Сохраняем в Firebase
+    if (playerId) {
+      await updateEquipment(GAME_ID, playerId, newEquipment);
+    }
+  }, [playerId]);
 
   // Экран выбора игрока и загрузки
   if (needsSlotSelection) {

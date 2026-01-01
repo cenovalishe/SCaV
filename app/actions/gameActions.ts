@@ -1101,3 +1101,32 @@ function getAnimatronicColor(id: string): string {
 }
 
 // /END_ANCHOR:GAMEACTIONS/RESPAWN
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:GAMEACTIONS/EQUIPMENT
+// Обновление экипировки игрока
+// КОНТРАКТ: Обновляет equipment игрока в Firebase
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function updateEquipment(gameId: string, playerId: string, equipment: any) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
+
+    await playerRef.update({
+      equipment: equipment,
+      lastUpdated: FieldValue.serverTimestamp()
+    });
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (e) {
+    console.error('updateEquipment error:', e);
+    return { success: false, message: 'Failed to update equipment' };
+  }
+}
+
+// /END_ANCHOR:GAMEACTIONS/EQUIPMENT
