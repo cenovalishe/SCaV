@@ -226,14 +226,16 @@ export interface PlayerState {
   id: string;
   name: string;
   currentNode: string;
-  status: 'IDLE' | 'MOVING' | 'IN_COMBAT' | 'DEAD' | 'LOOTING' | 'IN_OFFICE';
+  status: 'IDLE' | 'MOVING' | 'IN_COMBAT' | 'DEAD' | 'LOOTING' | 'IN_OFFICE' | 'IN_PVP';
   stats: CharacterStats;
   equipment: Equipment;
   inventory: string[];
   roubles: number;
   turnActions: number;
   gameLog: GameLogEntry[];
-  currentEnemyId?: string | null; // <--- ДОБАВЛЕНО: ID текущего врага
+  currentEnemyId?: string | null; // ID текущего врага (аниматроник)
+  pvpOpponentId?: string | null; // ID противника в PvP
+  pvpState?: PvPEncounterState | null; // Состояние PvP боя
 }
 
 // /END_ANCHOR:TYPES/PLAYER_STATE
@@ -247,8 +249,32 @@ export interface PlayerState {
 export interface GameLogEntry {
   timestamp: number;
   message: string;
-  type: 'move' | 'loot' | 'combat' | 'event' | 'system';
+  type: 'move' | 'loot' | 'combat' | 'event' | 'system' | 'pvp';
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:TYPES/PVP_SYSTEM
+// PvP система - бой между игроками
+// КОНТРАКТ: currentRound 1-3, инициатива определяет порядок ходов
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface PvPEncounterState {
+  initiatorId: string;        // ID игрока, инициировавшего PvP
+  targetId: string;           // ID цели
+  initiatorInitiative: number; // Инициатива инициатора
+  targetInitiative: number;    // Инициатива цели
+  currentRound: number;        // Текущий раунд (1-3)
+  maxRounds: number;           // Максимум раундов (3)
+  attackerId: string;          // ID атакующего в текущем раунде
+  defenderId: string;          // ID защищающегося в текущем раунде
+  initiatorHp: number;         // ХП инициатора на начало боя
+  targetHp: number;            // ХП цели на начало боя
+  combatLog: string[];         // Лог боя
+  status: 'pending' | 'in_progress' | 'completed'; // Статус PvP
+  outcome?: 'initiator_win' | 'target_win' | 'retreat' | 'peaceful'; // Результат
+}
+
+// /END_ANCHOR:TYPES/PVP_SYSTEM
 
 // /END_ANCHOR:TYPES/GAME_LOG
 

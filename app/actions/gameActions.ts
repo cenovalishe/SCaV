@@ -71,6 +71,10 @@ type MoveResponse = {
     enemyId?: string;
     enemyType?: string;
   };
+  pvpEncounter?: {
+    hasEncounter: boolean;
+    otherPlayers: Array<{ id: string; name: string }>;
+  };
 };
 
 // /END_ANCHOR:GAMEACTIONS/TYPES
@@ -238,12 +242,30 @@ export async function movePlayer(
     // 3. ФИНАЛЬНАЯ ПРОВЕРКА: Кто теперь в одной клетке с игроком?
     // Получаем обновленные данные врагов после их хода
     const updatedEnemiesSnap = await enemiesRef.get();
-    
+
     // Фильтруем врагов, которые находятся в той же ноде, куда пришел игрок
     // [PATCH] Удалена проверка hp у аниматроников
     const enemiesInNode = updatedEnemiesSnap.docs
       .map(doc => ({ id: doc.id, ...doc.data() } as any))
       .filter(e => e.currentNode === targetNodeId);
+
+    // 4. ПРОВЕРКА PVP: Проверяем наличие других игроков на той же ноде
+    const { isPvpZone } = await import('@/lib/pvpConfig');
+    let otherPlayersInNode: any[] = [];
+
+    if (isPvpZone(targetNodeId)) {
+      const playersRef = gameRef.collection('players');
+      const playersSnap = await playersRef.get();
+
+      otherPlayersInNode = playersSnap.docs
+        // [FIX] Добавлено 'as any', чтобы TypeScript видел свойства из doc.data()
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
+        .filter(p =>
+          p.id !== playerId && // Не текущий игрок
+          p.currentNode === targetNodeId && // На той же ноде
+          p.status !== 'DEAD' // Живой
+        );
+    }
 
     let finalStatus = "IDLE";
     let message = `Moved to ${targetNodeId}`;
@@ -251,7 +273,7 @@ export async function movePlayer(
 
     if (enemiesInNode.length > 0) {
       finalStatus = "IN_COMBAT";
-      
+
       // Случайный выбор врага из присутствующих
       const randomEnemy = enemiesInNode[Math.floor(Math.random() * enemiesInNode.length)];
       enemyId = randomEnemy.id;
@@ -262,17 +284,24 @@ export async function movePlayer(
         status: "IN_COMBAT",
         currentEnemyId: enemyId
       });
+    } else if (otherPlayersInNode.length > 0) {
+      // PvP встреча имеет приоритет после боя с аниматрониками
+      message = `Встречен игрок ${otherPlayersInNode[0].name} в PvP зоне!`;
     }
 
     revalidatePath('/');
     return {
       success: true,
       message: message,
-      event: finalStatus === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : "CLEAR",
+      event: finalStatus === "IN_COMBAT" ? "ENEMY_ENCOUNTER" : (otherPlayersInNode.length > 0 ? "PVP_ENCOUNTER" : "CLEAR"),
       collision: enemiesInNode.length > 0 ? {
         hasCollision: true,
         enemyId: enemyId,
         enemyType: enemiesInNode[0]?.type || enemiesInNode[0]?.id
+      } : undefined,
+      pvpEncounter: otherPlayersInNode.length > 0 ? {
+        hasEncounter: true,
+        otherPlayers: otherPlayersInNode.map(p => ({ id: p.id, name: p.name }))
       } : undefined
     };
   } catch (e) {
