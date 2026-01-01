@@ -65,13 +65,12 @@ import {
   createPlayerInSlot, 
   respawnEnemiesIfNeeded, 
   handleAnimatronicDefeat,
-  givePlayerItem, // <--- ДОБАВИТЬ ЭТОТ ИМПОРТ
-  movePlayer 
+  movePlayer,
+  givePlayerItem // ★ ДОБАВЛЕНО
 } from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
-import AdminTimeControls from '@/components/AdminTimeControls';
 
 // Компоненты
 import TabbedPanel from '@/components/TabbedPanel';
@@ -84,9 +83,10 @@ import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 import OfficeMechanic from '@/components/OfficeMechanic';
 import PlayerInspectModal from '@/components/PlayerInspectModal';
+import AdminTimeControls from '@/components/AdminTimeControls'; // ★ ДОБАВЛЕНО
 import { initializeNightCycle } from '@/app/actions/nightCycleActions';
 
-// Дефолтные значения
+// Дефолтные значения (capacity удален)
 const DEFAULT_STATS: CharacterStats = {
   attack: 1,
   defense: 1,
@@ -99,7 +99,7 @@ const DEFAULT_STATS: CharacterStats = {
   maxStamina: 7
 };
 
-// ★ Стартовая экипировка - ПУСТАЯ
+// Стартовая экипировка - ПУСТАЯ
 const DEFAULT_EQUIPMENT: Equipment = {
   helmet: null,
   armor: null,
@@ -134,47 +134,13 @@ export default function GameBoard() {
   const [needsSlotSelection, setNeedsSlotSelection] = useState(false);
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
 
-  // ★ Динамическая экипировка
+  // Динамическая экипировка
   const [equipment, setEquipment] = useState<Equipment>(DEFAULT_EQUIPMENT);
 
-  // ★ Найденный предмет (для анимации)
+  // Найденный предмет (для анимации)
   const [foundItem, setFoundItem] = useState<{ icon: string; name: string } | null>(null);
 
-
-  const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
-    setOfficeMechanic(null);
-    
-    // 1. Обработка урона
-    if (result.damageReceived > 0) {
-      const damageResult = await applyDamage(GAME_ID, playerId!, result.damageReceived);
-      
-      if (damageResult.success) {
-         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
-         if (damageResult.isDefeated) {
-            addLogEntry('💀 Вы погибли от рук аниматроника в Офисе...', 'combat');
-            await handleAnimatronicDefeat(GAME_ID, playerId!);
-            return; 
-         }
-      }
-    }
-
-    // 2. Выдача карты
-    if (result.receivedKeyCard) {
-        // ★ ВЫЗОВ СЕРВЕРНОГО ДЕЙСТВИЯ
-        const giveResult = await givePlayerItem(GAME_ID, playerId!, 'key_card');
-        
-        if (giveResult.success) {
-          addLogEntry('🗝️ Ключ-карта получена и добавлена в инвентарь!', 'loot');
-        } else {
-          addLogEntry(`⚠️ Ошибка получения карты: ${giveResult.message}`, 'system');
-        }
-    } else if (!result.survived) { 
-        addLogEntry('Смена не пройдена...', 'system');
-    }
-  }, [playerId, addLogEntry]);
-  
-
-  // ★ Лут рулетка
+  // Лут рулетка
   const [lootRoulette, setLootRoulette] = useState<{ active: boolean; possibleItems: string[] } | null>(null);
 
   // Состояние встречи с аниматроником
@@ -197,13 +163,13 @@ export default function GameBoard() {
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
 
-  // ★ Состояние механики офиса
+  // Состояние механики офиса
   const [officeMechanic, setOfficeMechanic] = useState<{ active: boolean } | null>(null);
 
-  // ★ Состояние попапа блокировки S/F
+  // Состояние попапа блокировки S/F
   const [sfBlockedPopup, setSfBlockedPopup] = useState<{ active: boolean; message: string } | null>(null);
 
-  // ★ Состояние модалки осмотра игрока
+  // Состояние модалки осмотра игрока
   const [inspectingPlayer, setInspectingPlayer] = useState<PlayerStateType | null>(null);
 
   // Функция добавления записи в лог
@@ -427,11 +393,12 @@ export default function GameBoard() {
     setSelectedNode(node);
   }, []);
 
-  // ★ ИСПРАВЛЕНО: Обработка внезапных встреч после перемещения
+  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ (с учетом десинка)
   const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
     if (!playerId) return;
 
     try {
+      // 1. Списываем выносливость
       if (!skipStaminaCost) {
         const updateRes = await updateStamina(GAME_ID, playerId, -staminaCost);
         if (!updateRes.success) {
@@ -440,6 +407,7 @@ export default function GameBoard() {
         }
       }
 
+      // 2. Вызываем Server Action для перемещения
       const result = await movePlayer(GAME_ID, playerId, targetNodeId, equipment);
 
       if (result.success) {
@@ -461,9 +429,12 @@ export default function GameBoard() {
         }
       } else {
         addLogEntry(result.message, 'system');
+        // Если перемещение не удалось (заблокировано), возвращаем выносливость
         if (!skipStaminaCost) {
              await updateStamina(GAME_ID, playerId, staminaCost);
         }
+        
+        // Показываем попап блокировки S/F, если это причина отказа
         if (result.message.includes('Вход заблокирован')) {
            setSfBlockedPopup({ active: true, message: result.message });
         }
@@ -502,7 +473,7 @@ export default function GameBoard() {
     }
   }, [playerId, player, currentStamina, enemies, addLogEntry, executeMove]);
 
-  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ (ИСПРАВЛЕННО)
+  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
      if (!encounter || !playerId) return;
      
@@ -510,11 +481,9 @@ export default function GameBoard() {
 
      // 1. Применяем урон, если он есть
      if (result.damageReceived > 0) {
-       // Вызываем server action для нанесения урона
        const damageResult = await applyDamage(GAME_ID, playerId, result.damageReceived);
        if (damageResult.success) {
          addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
-         // Получаем статус "побежден ли игрок" от сервера
          isDead = !!damageResult.isDefeated;
        }
      }
@@ -527,17 +496,14 @@ export default function GameBoard() {
          addLogEntry(`Вы пережили атаку ${encounter.enemyName}!`, 'combat');
        }
 
-       // Если игрок выбрал "Отступить" в колесе (если такая опция есть)
        if (result.retreated) {
          addLogEntry('Вы отступили назад.', 'combat');
-         // Не двигаемся в целевую точку
        } 
        // Если мы выжили и не отступаем - завершаем движение
        else if (encounter.pendingMove) {
          await executeMove(encounter.pendingMove.id, encounter.staminaCost);
        }
      } else {
-       // Если игрок погиб
        addLogEntry('💀 Вы были схвачены...', 'combat');
        await handleAnimatronicDefeat(GAME_ID, playerId);
      }
@@ -558,30 +524,36 @@ export default function GameBoard() {
     setPvpEncounter(null);
   }, [pvpEncounter, addLogEntry]);
 
-  // ★ ИСПРАВЛЕНО: Обработка смерти в офисе
+  // ★ ЗАВЕРШЕНИЕ МЕХАНИКИ ОФИСА (Исправлено)
   const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
     setOfficeMechanic(null);
     
+    // 1. Обработка урона
     if (result.damageReceived > 0) {
-      // Наносим урон и ПРОВЕРЯЕМ результат (умер ли игрок?)
       const damageResult = await applyDamage(GAME_ID, playerId!, result.damageReceived);
       
       if (damageResult.success) {
          addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
-         
-         // Если урон стал фатальным
          if (damageResult.isDefeated) {
             addLogEntry('💀 Вы погибли от рук аниматроника в Офисе...', 'combat');
             await handleAnimatronicDefeat(GAME_ID, playerId!);
-            return; // Прерываем выполнение, награду не выдаем
+            return; 
          }
       }
     }
-    
+
+    // 2. Выдача карты
     if (result.receivedKeyCard) {
-        addLogEntry('🗝️ Получена ключ-карта!', 'loot');
-    } else {
-      addLogEntry('Смена не пройдена...', 'system');
+        // ★ ВЫЗОВ СЕРВЕРНОГО ДЕЙСТВИЯ
+        const giveResult = await givePlayerItem(GAME_ID, playerId!, 'key_card');
+        
+        if (giveResult.success) {
+          addLogEntry('🗝️ Ключ-карта получена и добавлена в инвентарь!', 'loot');
+        } else {
+          addLogEntry(`⚠️ Ошибка получения карты: ${giveResult.message}`, 'system');
+        }
+    } else if (!result.survived) { 
+        addLogEntry('Смена не пройдена...', 'system');
     }
   }, [playerId, addLogEntry]);
 
@@ -607,7 +579,6 @@ export default function GameBoard() {
       
       if (result.success) {
         if (result.items && result.items.length > 0) {
-           // Если нашли что-то - запускаем рулетку для визуала
            const itemNames = result.items.map(id => ({ id, nameRu: getItemById(id)?.nameRu || id }));
            setLootRoulette({ active: true, possibleItems: result.items });
            addLogEntry(`Найдено предметов: ${result.items.length}`, 'loot');
@@ -662,16 +633,14 @@ export default function GameBoard() {
 
   const hasEnemyHere = enemiesAtCurrentNode.length > 0;
 
-  
-
   return (
     <main className="h-screen bg-black text-white overflow-hidden flex flex-col">
-
-      {/* 2. Вставьте компонент где-то в начале JSX, например перед EncounterSystem */}
+      
+      {/* АДМИН ПАНЕЛЬ (Только для player1) */}
       {playerId === 'player_cenoval' && (
         <AdminTimeControls gameId={GAME_ID} />
       )}
-      
+
       {/* Система встречи с аниматроником */}
       {encounter?.active && (
         <EncounterSystem
@@ -748,11 +717,11 @@ export default function GameBoard() {
             onAttackPlayer={handleAttackPlayer}
             onInspectPlayer={handleInspectPlayer}
             
-            // ★ ИНТЕГРАЦИЯ ГЛОБАЛЬНОГО ЦИКЛА
+            // ИНТЕГРАЦИЯ ГЛОБАЛЬНОГО ЦИКЛА
             nightCycle={nightCycle}
             calculatedNight={calculatedNight}
             calculatedHour={calculatedHour}
-            enemies={enemies} // Полный список для отображения AI уровней
+            enemies={enemies}
             gameId={GAME_ID}
             isAdmin={playerId === 'player1'}
           />
