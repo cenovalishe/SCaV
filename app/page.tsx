@@ -37,7 +37,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, updateStamina, applyDamage, lootLocation, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded, handleAnimatronicDefeat } from '@/app/actions/gameActions';
+import { 
+  getOrCreatePlayer, 
+  updateStamina, 
+  applyDamage, 
+  lootLocation, 
+  startNewTurnForAll, 
+  getTakenPlayerSlots, 
+  createPlayerInSlot, 
+  respawnEnemiesIfNeeded, 
+  handleAnimatronicDefeat,
+  movePlayer // ★ ДОБАВЛЕНО: Исправлен пропущенный импорт
+} from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
@@ -336,7 +347,7 @@ export default function GameBoard() {
     gameLog: []
   }));
 
-  // Обработчики событий (CameraSwitch, Attack, Inspect, Move, Loot, etc.)
+  // Обработчики событий
   const handleCameraSwitch = useCallback((node: MapNodeData) => {
     setViewingNode(node);
     addLogEntry(`Камера переключена на: ${node.nameRu}`, 'system');
@@ -364,17 +375,63 @@ export default function GameBoard() {
     setSelectedNode(node);
   }, []);
 
+  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ (Восстановлена логика)
+  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
+    if (!playerId) return;
+
+    try {
+      // 1. Списываем выносливость (если не пропущено, например, после побега)
+      if (!skipStaminaCost) {
+        const updateRes = await updateStamina(GAME_ID, playerId, -staminaCost);
+        if (!updateRes.success) {
+          addLogEntry('Ошибка обновления выносливости', 'system');
+          return;
+        }
+      }
+
+      // 2. Вызываем Server Action для перемещения
+      const result = await movePlayer(GAME_ID, playerId, targetNodeId, equipment);
+
+      if (result.success) {
+        addLogEntry(result.message, 'system');
+        
+        // 3. Обработка особых событий после перемещения
+        if (result.event === 'ENEMY_ENCOUNTER' && result.collision?.hasCollision) {
+           // Если сервер обнаружил врага (например, он пришел в эту же точку одновременно)
+           addLogEntry(`⚠️ ВНЕЗАПНАЯ ВСТРЕЧА: ${result.collision.enemyType}!`, 'combat');
+        }
+      } else {
+        addLogEntry(result.message, 'system');
+        // Если перемещение не удалось (заблокировано), возвращаем выносливость
+        if (!skipStaminaCost) {
+             await updateStamina(GAME_ID, playerId, staminaCost);
+        }
+        
+        // Показываем попап блокировки S/F, если это причина отказа
+        if (result.message.includes('Вход заблокирован')) {
+           setSfBlockedPopup({ active: true, message: result.message });
+        }
+      }
+    } catch (error) {
+      console.error("Move error", error);
+      addLogEntry("Критическая ошибка перемещения", 'system');
+    }
+  }, [playerId, equipment, addLogEntry]);
+
+  // ★ ЗАПРОС ПЕРЕМЕЩЕНИЯ ОТ UI (Восстановлена логика)
   const handleMoveRequest = useCallback(async (targetNode: MapNodeData, staminaCost: number) => {
-    /* (Логика перемещения сохранена полностью, скрыта для краткости) */
-    // ... [Original move logic implementation]
-    // В реальном файле здесь должен быть полный код handleMoveRequest, как в исходнике
     if (!playerId || !player) return;
+
     if (currentStamina < staminaCost) {
       addLogEntry('Недостаточно выносливости для перемещения!', 'system');
       return;
     }
+
+    // Проверяем наличие врага в целевой точке (клиентская проверка)
     const enemyAtTarget = enemies.find(e => e.currentNode === targetNode.id);
+
     if (enemyAtTarget) {
+      // Если враг есть - запускаем систему встречи
       setEncounter({
         active: true,
         enemyName: enemyAtTarget.type,
@@ -384,32 +441,27 @@ export default function GameBoard() {
         previousNode: player.currentNode
       });
     } else {
+      // Если чисто - идем
       await executeMove(targetNode.id, staminaCost);
     }
-  }, [playerId, player, currentStamina, enemies, addLogEntry]); // + executeMove dependency
+  }, [playerId, player, currentStamina, enemies, addLogEntry, executeMove]);
 
-  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
-     /* (Логика executeMove сохранена полностью) */
-    if (!playerId) return;
-    try {
-        // ... [Original executeMove logic]
-        // Код из оригинального файла для executeMove
-        if (!skipStaminaCost) {
-            await updateStamina(GAME_ID, playerId, -staminaCost);
-        }
-        // ...
-        // Вызов movePlayer и обработка результата
-        // ...
-    } catch (error) {
-        console.error("Move error", error);
-    }
-  }, [playerId, equipment, addLogEntry]);
-
-
+  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ (Восстановлена логика)
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
-     /* (Логика encounter сохранена полностью) */
      if (!encounter || !playerId) return;
-     // ... [Original logic]
+     
+     if (result.survived) {
+       addLogEntry(`Вы пережили встречу с ${encounter.enemyName}!`, 'combat');
+       // Если выжили - продолжаем движение в целевую точку
+       if (encounter.pendingMove) {
+         await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+       }
+     } else {
+       // Если проиграли - серверная обработка поражения
+       addLogEntry('💀 Вы были схвачены...', 'combat');
+       await handleAnimatronicDefeat(GAME_ID, playerId);
+     }
+     
      setEncounter(null);
   }, [encounter, playerId, executeMove, addLogEntry]);
 
@@ -421,7 +473,6 @@ export default function GameBoard() {
 
   const handlePvPComplete = useCallback(async (result: PvPEncounterResult) => {
     if (!pvpEncounter) return;
-    // ... [Original logic]
     if (result.outcome === 'peaceful') addLogEntry('PvP отклонен.', 'pvp');
     else addLogEntry('PvP завершен', 'pvp');
     setPvpEncounter(null);
@@ -434,25 +485,58 @@ export default function GameBoard() {
       addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
     }
     if (result.receivedKeyCard) {
-        // ... логика добавления карты
         addLogEntry('🗝️ Получена ключ-карта!', 'loot');
     } else {
       addLogEntry('Смена не пройдена...', 'system');
     }
   }, [playerId, addLogEntry]);
 
+  // ★ ЛУТИНГ (Восстановлена логика)
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
     setIsLooting(true);
-    // ... [Original loot logic]
-    // ...
+    addLogEntry('Обыскиваем локацию...', 'system');
+
+    try {
+      // Если это офис (Y), запускаем мини-игру
+      if (player?.currentNode === 'Y') {
+        const hasKeyCard = equipment.specials.includes('key_card');
+        if (!hasKeyCard) {
+             setOfficeMechanic({ active: true });
+             setIsLooting(false);
+             return;
+        }
+      }
+
+      // Обычный лутинг
+      const result = await lootLocation(GAME_ID, playerId);
+      
+      if (result.success) {
+        if (result.items && result.items.length > 0) {
+           // Если нашли что-то - запускаем рулетку для визуала
+           const itemNames = result.items.map(id => ({ id, nameRu: getItemById(id)?.nameRu || id }));
+           setLootRoulette({ active: true, possibleItems: result.items });
+           addLogEntry(`Найдено предметов: ${result.items.length}`, 'loot');
+           if (result.droppedItems && result.droppedItems.length > 0) {
+              addLogEntry(`Не поместилось: ${result.droppedItems.length}`, 'system');
+           }
+        } else {
+           addLogEntry(result.message, 'system');
+        }
+      } else {
+         addLogEntry(result.message, 'system');
+      }
+    } catch (e) {
+      console.error(e);
+      addLogEntry('Ошибка при обыске', 'system');
+    }
+
     setIsLooting(false);
-  }, [playerId, isLooting, addLogEntry]);
+  }, [playerId, isLooting, addLogEntry, player?.currentNode, equipment]);
 
   const handleLootRouletteComplete = useCallback((items: { id: string; nameRu: string }[]) => {
-      // ... [Original roulette logic]
       setLootRoulette(null);
-  }, [addLogEntry]);
+  }, []);
 
   const handleWait = useCallback(async () => {
     if (!playerId) return;
@@ -662,4 +746,5 @@ export default function GameBoard() {
       </div>
     </main>
   );
+}
 }
