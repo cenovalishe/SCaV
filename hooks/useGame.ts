@@ -6,131 +6,149 @@
  * PURPOSE: React хук для realtime подписки на состояние игры через Firebase
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * SEMANTIC ANCHORS INDEX:
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * /START_ANCHOR:USEGAME/IMPORTS ............... Импорты React и Firebase
- * /START_ANCHOR:USEGAME/TYPES ................. Типы PlayerState, EnemyState
- * /START_ANCHOR:USEGAME/HOOK .................. Хук useGame()
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * EXPORTS OVERVIEW:
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * TYPES:
- * PlayerState         - Состояние игрока (id, currentNode, status, stats)
- * EnemyState          - Состояние врага (id, currentNode, type, hp)
- *
- * HOOKS:
- * useGame(gameId, playerId)
- * → { player, allPlayers, enemies, isCombat, loading }
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * DEPENDENCY GRAPH:
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * IMPORTS FROM:
- * react              → useState, useEffect
- * firebase/firestore → doc, onSnapshot, collection, query
- * @/lib/firebaseClient → dbClient (клиентский Firestore)
- * @/lib/types        → PlayerState, AnimatronicState
- *
- * IMPORTED BY:
- * app/page.tsx       → основной хук для состояния игры
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * FIREBASE SUBSCRIPTIONS:
- * ═══════════════════════════════════════════════════════════════════════════════
- *
- * PLAYERS COLLECTION:
- * Path: games/{gameId}/players
- * onSnapshot → updates allPlayers[]
- * Filters playerId → updates player
- *
- * ENEMIES COLLECTION:
- * Path: games/{gameId}/enemies
- * onSnapshot → updates enemies[]
- *
- * CLEANUP:
- * Unsubscribes from both collections on unmount
- *
- * DERIVED STATE:
- * isCombat = player?.status === 'IN_COMBAT'
- *
- * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2024-12-31 | VERSION: 2.1.0 (FIX: Use central types)
+ * LAST MODIFIED: 2026-01-01 | VERSION: 2.3.0 (Firebase values = source of truth)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-'use client'
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/IMPORTS
-// Импорты React hooks и Firebase Firestore
-// ═══════════════════════════════════════════════════════════════════════════════
-
-import { useState, useEffect } from 'react';
-import { doc, onSnapshot, collection, query } from 'firebase/firestore';
+import { useState, useEffect, useRef } from 'react';
+import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { dbClient } from '@/lib/firebaseClient';
-// [FIX] Импортируем централизованные типы вместо локальных определений
-import { PlayerState, AnimatronicState } from '@/lib/types';
+import { PlayerState, AnimatronicState, GlobalNightCycle } from '@/lib/types';
+// Убран calculateNightAndHour - теперь значения берутся напрямую из Firebase
+import { syncNightCycle } from '@/app/actions/nightCycleActions';
 
-// /END_ANCHOR:USEGAME/IMPORTS
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/TYPES
-// Типы состояний
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Используем псевдоним для совместимости, если где-то явно используется EnemyState
-export type EnemyState = AnimatronicState;
-
-// /END_ANCHOR:USEGAME/TYPES
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/HOOK
-// Хук useGame - realtime подписка на состояние игры
-// КОНТРАКТ: Возвращает null для player до загрузки, автоматически unsubscribe при unmount
-// ═══════════════════════════════════════════════════════════════════════════════
+// ★ Дефолтное состояние цикла
+const DEFAULT_NIGHT_CYCLE: GlobalNightCycle = {
+  isActive: false,
+  currentNight: 1,
+  currentHour: 1,
+  startedAt: null,
+  timerEndAt: null,
+  lastHourUpdateAt: null,
+  lastNightUpdateAt: null
+};
 
 export function useGame(gameId: string, playerId: string) {
-  // [FIX] Используем импортированный PlayerState
   const [player, setPlayer] = useState<PlayerState | null>(null);
   const [allPlayers, setAllPlayers] = useState<PlayerState[]>([]);
-  const [enemies, setEnemies] = useState<EnemyState[]>([]);
+  const [enemies, setEnemies] = useState<AnimatronicState[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Состояние для глобальных данных игры
+  const [nightCycle, setNightCycle] = useState<GlobalNightCycle>(DEFAULT_NIGHT_CYCLE);
+
+  // Локальные вычисляемые значения
+  const [calculatedNight, setCalculatedNight] = useState(1);
+  const [calculatedHour, setCalculatedHour] = useState(1);
+
+  // ★ Ref для предотвращения повторной автоинициализации
+  const isAutoInitializing = useRef(false);
+
+  // 1. Подписка на ТЕКУЩЕГО ИГРОКА
   useEffect(() => {
     if (!gameId || !playerId) return;
 
-    // 1. Слушаем ВСЕХ игроков в этой игре
-    const playersRef = collection(dbClient, 'games', gameId, 'players');
-    const unsubPlayers = onSnapshot(playersRef, (snapshot) => {
-      // Приводим данные к PlayerState (предполагаем, что в БД записаны корректные данные)
-      const playersList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PlayerState));
-      setAllPlayers(playersList);
-
-      // Находим среди них "себя" и обновляем локальное состояние
-      const me = playersList.find(p => p.id === playerId);
-      if (me) setPlayer(me);
-
+    const playerRef = doc(dbClient, 'games', gameId, 'players', playerId);
+    const unsubscribe = onSnapshot(playerRef, (doc) => {
+      if (doc.exists()) {
+        setPlayer({ id: doc.id, ...doc.data() } as PlayerState);
+      }
       setLoading(false);
     });
 
-    // 2. Слушаем Врагов
-    const enemiesRef = collection(dbClient, 'games', gameId, 'enemies');
-    const unsubEnemies = onSnapshot(enemiesRef, (snapshot) => {
-      const enemiesList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as EnemyState));
-      setEnemies(enemiesList);
-    });
-
-    return () => {
-      unsubPlayers();
-      unsubEnemies();
-    };
+    return () => unsubscribe();
   }, [gameId, playerId]);
 
-  return { player, allPlayers, enemies, loading };
-}
+  // 2. Подписка на ВСЕХ ИГРОКОВ (для списка)
+  useEffect(() => {
+    if (!gameId) return;
 
-// /END_ANCHOR:USEGAME/HOOK
+    const fetchPlayers = async () => {
+      const playersRef = collection(dbClient, 'games', gameId, 'players');
+      const querySnapshot = await getDocs(playersRef);
+      const players = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerState));
+      setAllPlayers(players);
+    };
+
+    fetchPlayers();
+    const interval = setInterval(fetchPlayers, 5000);
+
+    return () => clearInterval(interval);
+  }, [gameId]);
+
+  // 3. Подписка на ВРАГОВ
+  useEffect(() => {
+    if (!gameId) return;
+
+    const enemiesRef = collection(dbClient, 'games', gameId, 'enemies');
+    const unsubscribe = onSnapshot(enemiesRef, (snapshot) => {
+      const enemiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnimatronicState));
+      setEnemies(enemiesData);
+    });
+
+    return () => unsubscribe();
+  }, [gameId]);
+
+  // 4. Подписка на ГЛОБАЛЬНЫЙ ДОКУМЕНТ ИГРЫ (для NightCycle)
+  useEffect(() => {
+    if (!gameId) return;
+
+    // Слушаем документ самой игры (games/game_alpha)
+    const gameRef = doc(dbClient, 'games', gameId);
+
+    const unsubscribe = onSnapshot(gameRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        // ★ FIX: Поддержка обоих имён полей для совместимости
+        const cycleData = data.globalNightCycle || data.nightCycle;
+        if (cycleData) {
+          setNightCycle(cycleData);
+        }
+      }
+    }, (error) => {
+        console.error("Error listening to game document:", error);
+    });
+
+    return () => unsubscribe();
+  }, [gameId]);
+
+  // 5. ★ FIX: Автоматическая инициализация при ручном переключении isActive в Firebase
+  // Если isActive=true но startedAt=null - вызываем syncNightCycle для инициализации
+  useEffect(() => {
+    if (!gameId) return;
+
+    // Проверяем условие: isActive=true и startedAt=null (ручное переключение)
+    if (nightCycle.isActive && !nightCycle.startedAt && !isAutoInitializing.current) {
+      isAutoInitializing.current = true;
+
+      console.log('[NightCycle] Detected manual activation, auto-initializing...');
+
+      syncNightCycle(gameId)
+        .then((result) => {
+          console.log('[NightCycle] Auto-initialization result:', result);
+          isAutoInitializing.current = false;
+        })
+        .catch((error) => {
+          console.error('[NightCycle] Auto-initialization error:', error);
+          isAutoInitializing.current = false;
+        });
+    }
+  }, [gameId, nightCycle.isActive, nightCycle.startedAt]);
+
+  // 6. ★ FIX: Синхронизация с Firebase значениями напрямую (вместо локального расчёта)
+  // Теперь изменения currentNight/currentHour в Firebase Console сразу отражаются в UI
+  useEffect(() => {
+    setCalculatedNight(nightCycle.currentNight || 1);
+    setCalculatedHour(nightCycle.currentHour || 1);
+  }, [nightCycle.currentNight, nightCycle.currentHour]);
+
+  return {
+    player,
+    allPlayers,
+    enemies,
+    loading,
+    nightCycle,
+    calculatedNight,
+    calculatedHour
+  };
+}
