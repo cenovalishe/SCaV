@@ -160,6 +160,7 @@ export async function startNightCycle(gameId: string) {
  * Синхронизировать состояние цикла с реальным временем
  * Вычисляет текущую ночь и час на основе прошедшего времени
  * Должна вызываться периодически клиентами
+ * ★ ВАЖНО: Если isActive=true но startedAt=null, автоматически инициализирует startedAt
  */
 export async function syncNightCycle(gameId: string) {
   if (!dbAdmin) {
@@ -176,17 +177,61 @@ export async function syncNightCycle(gameId: string) {
     const gameData = gameDoc.data();
     const cycle = gameData?.globalNightCycle as GlobalNightCycle | undefined;
 
-    if (!cycle || !cycle.isActive || !cycle.startedAt) {
+    if (!cycle) {
+      return {
+        success: true,
+        message: 'Cycle not initialized',
+        cycle: INITIAL_NIGHT_CYCLE,
+        needsUpdate: false,
+      };
+    }
+
+    // ★ FIX: Если isActive=true но startedAt=null - это ручное переключение в Firebase
+    // Автоматически инициализируем startedAt
+    if (cycle.isActive && !cycle.startedAt) {
+      const now = Date.now();
+      const timerEndAt = now + NIGHT_CYCLE_TIMINGS.totalDurationMs;
+
+      const initializedCycle: GlobalNightCycle = {
+        isActive: true,
+        startedAt: now,
+        currentNight: 1,
+        currentHour: 1,
+        timerEndAt: timerEndAt,
+        lastHourUpdateAt: now,
+        lastNightUpdateAt: now,
+      };
+
+      await gameRef.update({
+        globalNightCycle: initializedCycle,
+        lastUpdated: FieldValue.serverTimestamp(),
+      });
+
+      // Обновляем AI уровни аниматроников
+      await updateAnimatronicAILevels(gameId, 1, 1);
+
+      revalidatePath('/');
+      return {
+        success: true,
+        message: 'Night cycle auto-initialized from manual activation',
+        cycle: initializedCycle,
+        needsUpdate: true,
+        autoInitialized: true,
+      };
+    }
+
+    // Если цикл неактивен - просто возвращаем состояние
+    if (!cycle.isActive) {
       return {
         success: true,
         message: 'Cycle not active',
-        cycle: cycle || INITIAL_NIGHT_CYCLE,
+        cycle: cycle,
         needsUpdate: false,
       };
     }
 
     const now = Date.now();
-    const elapsedMs = now - cycle.startedAt;
+    const elapsedMs = now - cycle.startedAt!;
 
     // Проверяем, не закончился ли цикл
     if (elapsedMs >= NIGHT_CYCLE_TIMINGS.totalDurationMs) {
