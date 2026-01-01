@@ -85,47 +85,42 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
   const hpPercent = (effectiveStats.hp / effectiveStats.maxHp) * 100;
   const staminaPercent = (effectiveStats.stamina / effectiveStats.maxStamina) * 100;
 
+// Получаем путь к аватарке
+  const avatarSrc = AVATAR_MAP[playerName] || DEFAULT_AVATAR;
+
   return (
-              {/* Блок Аватара */}
-          <div className="relative w-full aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 mb-4 group">
-            
-            {/* Изображение */}
-            <Image 
-              src={AVATAR_MAP[playerName] || DEFAULT_AVATAR} 
-              alt={playerName}
-              fill
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
-              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              priority
-            />
-            
-            {/* Затемнение снизу для читаемости текста (опционально) */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+    <div className="h-full flex p-2 gap-3">
+      {/* ЛЕВАЯ ЧАСТЬ - Аватар */}
+      <div className="w-[55%] flex flex-col">
+        {/* Аватар контейнер */}
+        <div className="relative w-full aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 mb-4 group">
           
-            {/* Имя поверх картинки (если нужно) */}
-            <div className="absolute bottom-3 left-3 right-3">
-              <h2 className="text-xl font-bold text-white drop-shadow-md tracking-wider">
-                {playerName}
-              </h2>
-            </div>
-          </div>
-          {/* Имя и класс */}
-          <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black to-transparent">
-            <div className="text-purple-400/70 text-[9px] font-mono tracking-[0.2em] uppercase">
-              ▸ ДИКИЙ
-            </div>
-            <div className="text-white font-mono text-sm font-bold truncate">
-              {playerName || 'ИГРОК'}
-            </div>
+          {/* Изображение */}
+          <Image 
+            src={avatarSrc}
+            alt={playerName}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+            priority
+          />
+          
+          {/* Затемнение снизу для читаемости текста */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+          {/* Имя поверх картинки */}
+          <div className="absolute bottom-3 left-3 right-3">
+            <h2 className="text-xl font-bold text-white drop-shadow-md tracking-wider">
+              {playerName}
+            </h2>
           </div>
 
           {/* Статус индикатор */}
-          <div className="absolute top-2 right-2 flex items-center gap-1">
+          <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
             <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-lg shadow-green-500/50" />
-            <span className="text-green-400 font-mono text-[8px]">ONLINE</span>
+            <span className="text-green-400 font-mono text-[8px] drop-shadow-md bg-black/50 px-1 rounded">ONLINE</span>
           </div>
         </div>
-
       </div>
 
       {/* ПРАВАЯ ЧАСТЬ - Характеристики (одна колонка) */}
@@ -158,7 +153,6 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
                 {/* Визуальный индикатор */}
                 <div className="flex gap-0.5">
                   {Array(10).fill(0).map((_, i) => {
-                    // Показываем базовые значения и бонусы разными цветами
                     const isBase = i < baseValue;
                     const isBonus = i >= baseValue && i < effectiveValue;
                     const isMalus = i < baseValue && i >= effectiveValue;
