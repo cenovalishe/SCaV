@@ -51,6 +51,7 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
+import { PlayerState, GameLogEntry } from '@/lib/types';
 
 // /END_ANCHOR:GAMEACTIONS/IMPORTS
 
@@ -81,23 +82,85 @@ type MoveResponse = {
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // /START_ANCHOR:GAMEACTIONS/MOVEMENT_UTILS
-// Утилиты для валидации движения
-// КОНТРАКТ: DEAD_END_NODES позволяют возврат назад
+// ★ Утилиты для валидации движения (ОБНОВЛЕНО)
+// КОНТРАКТ:
+// - DEAD_END_NODES (3, 4, 7, 9) позволяют возврат назад
+// - Y и X действуют как поворотные петли с направлением
+// - Однонаправленное движение на основных маршрутах
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const DEAD_END_NODES = ['3', '4', '7', '9'];
 
-function canBacktrack(playerData: any, currentNodeId: string, targetNodeId: string): boolean {
-  if (playerData.hasReachedY) return true;
-  if (DEAD_END_NODES.includes(currentNodeId)) return true;
+// Западные точки (ведут к V → Y)
+const WEST_ROUTE_NODES = ['D', '9', '8', 'G', '6', '7', 'V'];
+// Восточные точки (ведут к B → Y)
+const EAST_ROUTE_NODES = ['A', '3', '4', '5', 'B'];
 
+/**
+ * ★ Проверка возможности возврата назад
+ * Правила:
+ * 1. Тупиковые точки (3, 4, 7, 9) - всегда можно вернуться
+ * 2. Y (Офис) - поворотная петля: пришёл с запада → можешь пойти на восток
+ * 3. X - поворотная петля если пришёл с 1 или 2
+ * 4. На всех остальных маршрутах - нельзя возвращаться
+ */
+function canBacktrack(playerData: any, currentNodeId: string, targetNodeId: string): boolean {
+  // 1. Тупиковые точки - всегда можно вернуться
+  if (DEAD_END_NODES.includes(currentNodeId)) {
+    return true;
+  }
+
+  // 2. Y (Офис) - поворотная петля
+  if (currentNodeId === 'Y') {
+    const enteredFrom = playerData.lastDirection || null;
+
+    // Если пришёл с V (запад), может идти только на B (восток)
+    if (enteredFrom === 'west') {
+      if (targetNodeId === 'V') return false; // Нельзя назад на запад
+      if (targetNodeId === 'B') return true;   // Можно на восток
+    }
+    // Если пришёл с B (восток), может идти только на V (запад)
+    if (enteredFrom === 'east') {
+      if (targetNodeId === 'B') return false;  // Нельзя назад на восток
+      if (targetNodeId === 'V') return true;   // Можно на запад
+    }
+    return true;
+  }
+
+  // 3. X - поворотная петля если пришёл с 1 или 2
+  if (currentNodeId === 'X') {
+    const enteredXFrom = playerData.enteredXFrom || null;
+
+    // Если пришёл в X с ноды 1 или 2 (то есть возвращается с маршрута)
+    if (enteredXFrom === '1' || enteredXFrom === '2') {
+      // Может выйти через SF или пойти на другой маршрут
+      // Нельзя вернуться обратно на тот же маршрут
+      if (targetNodeId === enteredXFrom) return false;
+      return true;
+    }
+
+    // Если пришёл с SF (начало игры) - стандартная логика взаимоисключающих веток
+    return true;
+  }
+
+  // 4. Стандартная проверка - нельзя возвращаться на предыдущую ноду
   const visitedNodes = playerData.visitedNodes || [];
   const lastVisited = visitedNodes[visitedNodes.length - 1];
 
   if (lastVisited === targetNodeId) {
     return false;
   }
+
   return true;
+}
+
+/**
+ * ★ Определение направления прихода в Y
+ */
+function getDirectionToY(fromNode: string): 'west' | 'east' | null {
+  if (fromNode === 'V') return 'west';
+  if (fromNode === 'B') return 'east';
+  return null;
 }
 
 // /END_ANCHOR:GAMEACTIONS/MOVEMENT_UTILS
@@ -169,9 +232,16 @@ export async function movePlayer(
       }
     }
 
-    // Проверка возврата назад
+    // ★ Проверка возврата назад (однонаправленное движение)
     if (!canBacktrack(playerData, currentNodeId, targetNodeId)) {
-      return { success: false, message: "Нельзя возвращаться назад! (кроме тупиков и после достижения офиса)" };
+      // Формируем информативное сообщение
+      if (currentNodeId === 'Y') {
+        return { success: false, message: "Нельзя вернуться тем же путём! Офис - поворотная точка. Идите через другой выход." };
+      }
+      if (currentNodeId === 'X') {
+        return { success: false, message: "Нельзя вернуться на тот же маршрут! Выйдите через S/F или выберите другой путь." };
+      }
+      return { success: false, message: "Нельзя возвращаться назад! Только тупиковые точки (3, 4, 7, 9) позволяют отступление." };
     }
 
     let newChosenBranch = playerData?.chosenBranch;
@@ -186,6 +256,30 @@ export async function movePlayer(
     // FIX: Отслеживаем выход из SF (для блокировки повторного входа)
     const hasLeftSF = playerData?.hasLeftSF || currentNodeId === 'SF';
 
+    // ★ Отслеживание направления для поворотных петель
+    let lastDirection = playerData?.lastDirection;
+    let enteredXFrom = playerData?.enteredXFrom;
+
+    // При входе в Y запоминаем направление прихода
+    if (targetNodeId === 'Y') {
+      const direction = getDirectionToY(currentNodeId);
+      if (direction) {
+        lastDirection = direction;
+      }
+    }
+
+    // При входе в X с точек 1 или 2 (возврат с маршрута)
+    if (targetNodeId === 'X' && (currentNodeId === '1' || currentNodeId === '2')) {
+      enteredXFrom = currentNodeId;
+      // ★ Сбрасываем chosenBranch чтобы можно было выбрать новый маршрут
+      newChosenBranch = null;
+    }
+
+    // При выходе с X на SF сбрасываем enteredXFrom
+    if (currentNodeId === 'X' && targetNodeId === 'SF') {
+      enteredXFrom = null;
+    }
+
     // 1. Сначала перемещаем игрока и сбрасываем боевые статусы
     await playerRef.update({
       currentNode: targetNodeId,
@@ -195,6 +289,8 @@ export async function movePlayer(
       hasReachedY: hasReachedY,
       hasLeftSF: hasLeftSF, // FIX: Флаг выхода из SF
       visitedNodes: updatedVisitedNodes,
+      lastDirection: lastDirection,    // ★ Направление прихода в Y
+      enteredXFrom: enteredXFrom,      // ★ Откуда пришли в X
       lastUpdated: FieldValue.serverTimestamp()
     });
 
@@ -262,8 +358,8 @@ export async function movePlayer(
         .map(doc => ({ id: doc.id, ...doc.data() } as any))
         .filter(p =>
           p.id !== playerId && // Не текущий игрок
-          p.currentNode === targetNodeId && // На той же ноде
-          p.status !== 'DEAD' // Живой
+          p.currentNode === targetNodeId // На той же ноде
+          // ★ Статус DEAD удалён - все игроки могут участвовать в PvP
         );
     }
 
@@ -384,7 +480,7 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
 // ═══════════════════════════════════════════════════════════════════════════════
 // /START_ANCHOR:GAMEACTIONS/STAMINA
 // Управление выносливостью и здоровьем
-// КОНТРАКТ: stamina >= 0, hp <= 100, hp=0 → status='DEAD'
+// ★ КОНТРАКТ ИЗМЕНЁН: hp=0 → не DEAD, а вызов handleAnimatronicDefeat/handlePvPDefeat
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export async function updateStamina(gameId: string, playerId: string, staminaChange: number) {
@@ -419,6 +515,91 @@ export async function updateStamina(gameId: string, playerId: string, staminaCha
   }
 }
 
+/**
+ * ★ Расчёт 1/3 случайных предметов для потери
+ */
+function calculateItemsToLose(inventory: string[]): string[] {
+  const validItems = inventory.filter(item => item !== null && item !== '');
+  const loseCount = Math.ceil(validItems.length / 3);
+
+  // Перемешиваем и берём случайные предметы
+  const shuffled = [...validItems].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, loseCount);
+}
+
+/**
+ * ★ Обработка поражения игрока от аниматроников
+ * - Теряет 1/3 случайных предметов
+ * - Отступает на предыдущую маршрутную точку
+ * - HP сбрасывается до 10
+ */
+export async function handleAnimatronicDefeat(
+  gameId: string,
+  playerId: string
+) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
+
+    const result = await dbAdmin.runTransaction(async (t) => {
+      const playerDoc = await t.get(playerRef);
+
+      if (!playerDoc.exists) {
+        throw new Error('Player not found');
+      }
+
+      const playerData = playerDoc.data() as PlayerState;
+      const inventory = playerData.inventory || [];
+
+      // Определяем предметы для потери
+      const itemsToLose = calculateItemsToLose(inventory);
+      const newInventory = inventory.filter(item => !itemsToLose.includes(item));
+
+      // Определяем ноду для отступления (предыдущая или SF)
+      const visitedNodes = (playerData as any).visitedNodes || [];
+      const previousNode = visitedNodes.length > 0 ? visitedNodes[visitedNodes.length - 1] : 'SF';
+
+      // Обновляем игрока
+      t.update(playerRef, {
+        'stats.hp': 10,
+        status: 'IDLE',
+        inventory: newInventory,
+        currentNode: previousNode,
+        currentEnemyId: null,
+        'gameLog': [
+          ...(playerData.gameLog || []),
+          {
+            timestamp: Date.now(),
+            message: `💀 Вы были повержены! Потеряно ${itemsToLose.length} предметов. Отступление на ${previousNode}.`,
+            type: 'combat'
+          } as GameLogEntry
+        ],
+        lastUpdated: FieldValue.serverTimestamp()
+      });
+
+      return {
+        success: true,
+        lostItems: itemsToLose,
+        retreatNode: previousNode,
+        newHp: 10
+      };
+    });
+
+    revalidatePath('/');
+    return result;
+  } catch (error) {
+    console.error('Animatronic defeat handling error:', error);
+    return { success: false, message: 'Failed to handle defeat' };
+  }
+}
+
+/**
+ * Нанести урон игроку
+ * ★ Теперь не устанавливает статус DEAD, а возвращает флаг isDefeated
+ */
 export async function applyDamage(gameId: string, playerId: string, damage: number) {
   if (!dbAdmin) {
     return { success: false, message: 'Firebase not configured' };
@@ -435,16 +616,16 @@ export async function applyDamage(gameId: string, playerId: string, damage: numb
     const playerData = playerSnap.data();
     const currentHp = playerData?.stats?.hp || 100;
     const newHp = Math.max(0, currentHp - damage);
-    const isDead = newHp <= 0;
+    const isDefeated = newHp <= 0;
 
+    // ★ Теперь просто обновляем HP, обработка поражения происходит отдельно
     await playerRef.update({
       'stats.hp': newHp,
-      status: isDead ? 'DEAD' : 'IDLE',
       lastUpdated: FieldValue.serverTimestamp()
     });
 
     revalidatePath('/');
-    return { success: true, newHp, isDead };
+    return { success: true, newHp, isDefeated };
   } catch (e) {
     console.error(e);
     return { success: false, message: 'Failed to apply damage' };
@@ -662,7 +843,7 @@ export async function checkAllPlayersExhausted(gameId: string) {
 
     const allExhausted = playersSnap.docs.every(doc => {
       const data = doc.data();
-      if (data.status === 'DEAD') return true;
+      // ★ Статус DEAD удалён - проверяем только stamina
       return (data.stats?.stamina || 0) === 0;
     });
 
@@ -691,10 +872,7 @@ export async function startNewTurnForAll(gameId: string) {
     const updatePromises = playersSnap.docs.map(async (doc) => {
       const playerData = doc.data();
 
-      if (playerData.status === 'DEAD') {
-        return;
-      }
-
+      // ★ Статус DEAD удалён - все игроки получают стамину
       const maxStamina = playerData.stats?.maxStamina || 7;
       const diceRoll = Math.floor(Math.random() * 6) + 1;
       const staminaGain = 1 + diceRoll;

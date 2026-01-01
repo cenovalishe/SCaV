@@ -22,7 +22,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded } from '@/app/actions/gameActions';
+import { getOrCreatePlayer, movePlayer, updateStamina, applyDamage, lootLocation, checkAllPlayersExhausted, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded, handleAnimatronicDefeat } from '@/app/actions/gameActions';
 import { MAP_NODES_DATA, MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
@@ -37,6 +37,7 @@ import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 import OfficeMechanic from '@/components/OfficeMechanic';
+import PlayerInspectModal from '@/components/PlayerInspectModal';
 
 // Дефолтные значения (соответствуют начальным характеристикам в createPlayerInSlot)
 const DEFAULT_STATS: CharacterStats = {
@@ -121,6 +122,9 @@ export default function GameBoard() {
 
   // ★ Состояние попапа блокировки S/F
   const [sfBlockedPopup, setSfBlockedPopup] = useState<{ active: boolean; message: string } | null>(null);
+
+  // ★ Состояние модалки осмотра игрока
+  const [inspectingPlayer, setInspectingPlayer] = useState<PlayerStateType | null>(null);
 
   // Функция добавления записи в лог (полная история)
   const addLogEntry = useCallback((message: string, type: GameLogEntry['type']) => {
@@ -228,8 +232,8 @@ export default function GameBoard() {
     if (!playerId || loading || allPlayers.length === 0) return;
     if (isCheckingTurn.current) return;
 
+    // ★ Статус DEAD удалён - проверяем только stamina
     const allExhausted = allPlayers.every(p => {
-      if (p.status === 'DEAD') return true;
       return (p.stats?.stamina || 0) === 0;
     });
 
@@ -275,7 +279,20 @@ export default function GameBoard() {
     .map(p => ({
       id: p.id,
       name: (p as any).name || 'Игрок',
-      isCurrentPlayer: p.id === playerId
+      isCurrentPlayer: p.id === playerId,
+      // ★ Полные данные игрока для осмотра и PvP
+      playerData: {
+        id: p.id,
+        name: (p as any).name || 'Игрок',
+        currentNode: p.currentNode,
+        status: p.status,
+        stats: { ...DEFAULT_STATS, ...p.stats },
+        equipment: (p as any).equipment || DEFAULT_EQUIPMENT,
+        inventory: p.inventory || [],
+        roubles: 0,
+        turnActions: 4,
+        gameLog: []
+      } as PlayerStateType
     }));
 
   // Для панели действий используем ТЕКУЩУЮ ноду
@@ -312,6 +329,28 @@ export default function GameBoard() {
   const handleCameraSwitch = useCallback((node: MapNodeData) => {
     setViewingNode(node);
     addLogEntry(`Камера переключена на: ${node.nameRu}`, 'system');
+  }, [addLogEntry]);
+
+  // ★ Обработчик атаки игрока (инициация PvP через меню)
+  const handleAttackPlayer = useCallback((targetPlayer: PlayerStateType) => {
+    if (!player) return;
+
+    // Находим полные данные игрока в allPlayers
+    const fullTargetData = allPlayers.find(p => p.id === targetPlayer.id);
+    if (!fullTargetData) return;
+
+    addLogEntry(`⚔️ Атакуем ${targetPlayer.name}!`, 'pvp');
+    setPvpEncounter({
+      active: true,
+      otherPlayer: fullTargetData,
+      isInitiator: true
+    });
+  }, [player, allPlayers, addLogEntry]);
+
+  // ★ Обработчик осмотра игрока (открытие модалки)
+  const handleInspectPlayer = useCallback((targetPlayer: PlayerStateType) => {
+    setInspectingPlayer(targetPlayer);
+    addLogEntry(`👁️ Осматриваем ${targetPlayer.name}`, 'system');
   }, [addLogEntry]);
 
   // Обработчик выбора узла на карте
@@ -377,15 +416,10 @@ export default function GameBoard() {
           });
         }
 
-        // ★ Обработка PvP встречи
+        // ★ Уведомление о других игроках в PvP-зоне (без автоматического запуска боя)
         if (res.pvpEncounter?.hasEncounter && res.pvpEncounter.otherPlayers.length > 0) {
-          const otherPlayer = res.pvpEncounter.otherPlayers[0];
-          addLogEntry(`PvP встреча с ${otherPlayer.name}!`, 'pvp');
-          setPvpEncounter({
-            active: true,
-            otherPlayer: otherPlayer,
-            isInitiator: true // Текущий игрок инициирует PvP
-          });
+          const playerNames = res.pvpEncounter.otherPlayers.map(p => p.name).join(', ');
+          addLogEntry(`👥 В этой зоне присутствуют: ${playerNames}. Используйте меню камеры для взаимодействия.`, 'system');
         }
 
         // ★ Запуск механики офиса при входе в ноду Y
@@ -430,7 +464,18 @@ export default function GameBoard() {
                         result.action === 'respin' ? 'перекрутил и получил' : 'получил';
       addLogEntry(`${result.animatronicName} атакует! Игрок ${actionText} ${result.damageReceived} урона!`, 'combat');
 
-      await applyDamage(GAME_ID, playerId, result.damageReceived);
+      const damageResult = await applyDamage(GAME_ID, playerId, result.damageReceived);
+
+      // ★ Проверка на поражение (HP упал до 0)
+      if (damageResult.success && damageResult.isDefeated) {
+        addLogEntry('💀 Вы были повержены аниматроником!', 'combat');
+        const defeatResult = await handleAnimatronicDefeat(GAME_ID, playerId);
+        if (defeatResult.success && 'lostItems' in defeatResult) {
+          addLogEntry(`Потеряно ${defeatResult.lostItems.length} предметов. Отступление на ${defeatResult.retreatNode}. HP восстановлен до 10.`, 'combat');
+        }
+        setEncounter(null);
+        return;
+      }
 
       if (result.retreated) {
         addLogEntry(`Отступление на предыдущую позицию`, 'move');
@@ -736,6 +781,14 @@ export default function GameBoard() {
         />
       )}
 
+      {/* ★ Модалка осмотра игрока */}
+      {inspectingPlayer && (
+        <PlayerInspectModal
+          player={inspectingPlayer}
+          onClose={() => setInspectingPlayer(null)}
+        />
+      )}
+
       {/* ★ Попап блокировки S/F */}
       {sfBlockedPopup?.active && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90">
@@ -770,6 +823,8 @@ export default function GameBoard() {
             nodeId={cameraNodeId}
             enemiesHere={enemiesAtViewingNode}
             playersHere={playersAtViewingNode}
+            onAttackPlayer={handleAttackPlayer}
+            onInspectPlayer={handleInspectPlayer}
           />
 
           {/* Панель действий */}
