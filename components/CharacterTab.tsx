@@ -100,7 +100,7 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
             src={avatarSrc}
             alt={playerName}
             fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            className="object-cover object-[50%_25%] transition-transform duration-500 group-hover:scale-105"
             sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
             priority
           />
