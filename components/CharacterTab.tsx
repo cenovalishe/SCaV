@@ -58,13 +58,14 @@ function getStatColor(value: number): string {
 // Карта соответствия имен и файлов. 
 // Ключи (слева) должны совпадать с playerName, который приходит в компонент.
 const AVATAR_MAP: Record<string, string> = {
-  'player_manki': '/avatars/Gemini_Generated_Image_bnrjhkbnrjhkbnrj.jpg',
-  'player_cenoval': '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg',
-  'player_malekith': '/avatars/Gemini_Generated_Image_ffspc2ffspc2ffsp.jpg',
-  'player_marenyuk': '/avatars/Gemini_Generated_Image_ncif9qncif9qncif.jpg',
-  'player_shoker': '/avatars/Gemini_Generated_Image_kd8ffmkd8ffmkd8f.jpg',
-  'player_sunekoi': '/avatars/Gemini_Generated_Image_r4h8kdr4h8kdr4h8.jpg',
-  'player_smailgames': 'avatars/Gemini_Generated_Image_vmf1hgvmf1hgvmf1.jpg',
+  'Егор Шокеридзе': '/avatars/Gemini_Generated_Image_kd8ffmkd8ffmkd8f.jpg', // player_shoker
+  'Сева Пармезан': '/avatars/Gemini_Generated_Image_bnrjhkbnrjhkbnrj.jpg',  // player_manki
+  'Толя Самара': '/avatars/Gemini_Generated_Image_r4h8kdr4h8kdr4h8.jpg',    // player_sunekoi
+  'Иван Кимпентяо': '/avatars/Gemini_Generated_Image_ncif9qncif9qncif.jpg', // player_marenyuk
+  'Ильяс Вахта': '/avatars/Gemini_Generated_Image_vmf1hgvmf1hgvmf1.jpg',    // player_smailgames
+  'Макс Гребень': '/avatars/Gemini_Generated_Image_ffspc2ffspc2ffsp.jpg',   // player_malekith
+  'Гоша Грибок': '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg',    // player_cenoval
+};
   // Добавьте остальных персонажей здесь
   // 'ИмяПерсонажа': '/avatars/ИмяФайла.jpg'
 };
