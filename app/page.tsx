@@ -70,6 +70,7 @@ import {
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
+import AdminTimeControls from '@/components/AdminTimeControls';
 
 // Компоненты
 import TabbedPanel from '@/components/TabbedPanel';
@@ -627,8 +628,16 @@ export default function GameBoard() {
 
   const hasEnemyHere = enemiesAtCurrentNode.length > 0;
 
+  
+
   return (
     <main className="h-screen bg-black text-white overflow-hidden flex flex-col">
+
+      {/* 2. Вставьте компонент где-то в начале JSX, например перед EncounterSystem */}
+      {playerId === 'player1' && (
+        <AdminTimeControls gameId={GAME_ID} />
+      )}
+      
       {/* Система встречи с аниматроником */}
       {encounter?.active && (
         <EncounterSystem
