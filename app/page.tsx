@@ -192,9 +192,13 @@ export default function GameBoard() {
     if (player.pvpState) {
       const pvp = player.pvpState;
 
-      // Игнорируем, если статус уже 'completed' (чтобы не открывать старые окна при рефреше)
-      // Если нужно показывать результаты после рефреша, можно убрать проверку 'completed'
-      if (pvp.status === 'completed' && pvp.outcome === 'peaceful') return;
+      // [FIX] Игнорируем завершенные бои (мирные ИЛИ отступление), 
+      // чтобы не открывать окно повторно пока сервер очищает данные
+      if (pvp.status === 'completed') {
+        if (pvp.outcome === 'peaceful' || pvp.outcome === 'retreat') {
+          return;
+        }
+      }
 
       // 4. Определяем роль и находим оппонента
       const isInitiator = player.id === pvp.initiatorId;
@@ -210,7 +214,7 @@ export default function GameBoard() {
           isInitiator: isInitiator
         });
         
-        // Логируем событие (только для входящего вызова, чтобы не дублировать лог инициатора)
+        // Логируем событие (только для входящего вызова)
         if (!isInitiator && pvp.status === 'pending') {
            addLogEntry(`⚠️ ВАС АТАКУЕТ ${opponent.name || 'Unknown'}!`, 'pvp');
         }
