@@ -112,9 +112,48 @@ export type EquipmentSlotType =
   | 'special2'    // Спец слот 2
   | 'special3'    // Спец слот 3
   | 'weapon'      // Оружие - основное
-  | 'scope'       // Прицел - обвес оружия
-  | 'tactical'    // ЛЦУ/Фонарь - обвес
-  | 'suppressor'; // Глушитель - обвес
+  | 'module0'     // Модуль 1 - универсальный слот (бывший прицел)
+  | 'module1'     // Модуль 2 - универсальный слот (бывший ЛЦУ)
+  | 'module2';    // Модуль 3 - универсальный слот (бывший глушитель)
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:TYPES/SLOT_ITEM_RESTRICTIONS
+// Маппинг слотов к типам предметов, которые можно в них экипировать
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export type ItemType = 'consumable' | 'equipment' | 'weapon' | 'attachment' | 'valuable' | 'key';
+
+// Определяет подтип предмета для более точных ограничений слотов
+export type ItemSubType =
+  | 'helmet'      // Шлемы
+  | 'armor'       // Броня
+  | 'clothes'     // Одежда
+  | 'weapon'      // Оружие
+  | 'module'      // Модули (фонарик, прицел и т.д.)
+  | 'consumable'  // Расходники
+  | 'valuable'    // Ценности
+  | 'key'         // Ключи
+  | 'any';        // Любой тип
+
+// Какие подтипы предметов разрешены в каждом слоте
+export const SLOT_ALLOWED_SUBTYPES: Record<string, ItemSubType[]> = {
+  helmet: ['helmet'],
+  armor: ['armor'],
+  clothes: ['clothes'],
+  weapon: ['weapon'],
+  module0: ['module'],
+  module1: ['module'],
+  module2: ['module'],
+  pocket0: ['consumable', 'valuable', 'key', 'any'],
+  pocket1: ['consumable', 'valuable', 'key', 'any'],
+  pocket2: ['consumable', 'valuable', 'key', 'any'],
+  pocket3: ['consumable', 'valuable', 'key', 'any'],
+  special0: ['key', 'valuable'],
+  special1: ['key', 'valuable'],
+  special2: ['key', 'valuable'],
+};
+
+// /END_ANCHOR:TYPES/SLOT_ITEM_RESTRICTIONS
 
 // /END_ANCHOR:TYPES/EQUIPMENT_SLOTS
 
@@ -171,13 +210,14 @@ export interface Item {
   name: string;
   nameRu: string;
   type: 'consumable' | 'equipment' | 'weapon' | 'attachment' | 'valuable' | 'key';
+  subType?: ItemSubType;  // Подтип для ограничений слотов (helmet, armor, clothes, weapon, module и т.д.)
   value: number;
-  
+
   // ИЗМЕНЕНИЕ: Заменяем абстрактный size на конкретные измерения
   width: number;       // Ширина в ячейках (по горизонтали)
   height: number;      // Высота в ячейках (по вертикали)
   size?: number;       // (Legacy) Можно оставить как геттер или total slots (w*h)
-  
+
   icon: string;
   effects?: ItemEffect[];
   stackable?: boolean;
@@ -206,9 +246,7 @@ export interface Equipment {
   pockets: (string | null)[];   // 4 кармана
   specials: (string | null)[];  // 3 спец слота
   weapon: string | null;
-  scope: string | null;
-  tactical: string | null;
-  suppressor: string | null;
+  modules: (string | null)[];   // 3 универсальных модуля (заменяют scope/tactical/suppressor)
   rig: Container | null;        // Разгрузка (красные слоты)
   bag: Container | null;        // Сумка (синие слоты)
   backpack: Container | null;   // Рюкзак (оранжевые слоты)

@@ -429,6 +429,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Flashlight',
     nameRu: 'Фонарик',
     type: 'equipment',
+    subType: 'module',
     value: 2000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🔦',
@@ -439,6 +440,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Wrench',
     nameRu: 'Гаечный ключ',
     type: 'equipment',
+    subType: 'module',
     value: 1800,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🔧',
@@ -453,6 +455,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Security Helmet',
     nameRu: 'Шлем охранника',
     type: 'equipment',
+    subType: 'helmet',
     value: 5000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '⛑️',
@@ -463,6 +466,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Security Vest',
     nameRu: 'Бронежилет охранника',
     type: 'equipment',
+    subType: 'armor',
     value: 8000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🦺',
@@ -473,6 +477,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Night Vision Goggles',
     nameRu: 'Прибор ночного видения',
     type: 'equipment',
+    subType: 'helmet',
     value: 12000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🥽',
@@ -483,6 +488,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Sneakers',
     nameRu: 'Кроссовки',
     type: 'equipment',
+    subType: 'clothes',
     value: 3000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '👟',
@@ -493,6 +499,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Tactical Gloves',
     nameRu: 'Тактические перчатки',
     type: 'equipment',
+    subType: 'clothes',
     value: 2500,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🧤',
@@ -503,6 +510,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Large Backpack',
     nameRu: 'Большой рюкзак',
     type: 'equipment',
+    subType: 'any',
     value: 6000,
     width: 2, height: 2, size: 4, // 2x2
     icon: '🎒',
@@ -513,6 +521,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Lucky Charm',
     nameRu: 'Талисман удачи',
     type: 'equipment',
+    subType: 'any',
     value: 4000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🍀',
@@ -527,6 +536,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Kitchen Knife',
     nameRu: 'Кухонный нож',
     type: 'weapon',
+    subType: 'weapon',
     value: 3500,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🔪',
@@ -537,6 +547,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Frying Pan',
     nameRu: 'Сковорода',
     type: 'weapon',
+    subType: 'weapon',
     value: 2000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🍳',
@@ -547,6 +558,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Baseball Bat',
     nameRu: 'Бейсбольная бита',
     type: 'weapon',
+    subType: 'weapon',
     value: 4000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🏏',
@@ -561,6 +573,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Key Card',
     nameRu: 'Ключ-карта',
     type: 'key',
+    subType: 'key',
     value: 10000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🗝️'
@@ -642,14 +655,18 @@ export function calculateEffectiveStats(
     }
   };
 
-  // Слоты экипировки (шлем, броня, одежда, оружие и обвесы)
+  // Слоты экипировки (шлем, броня, одежда, оружие и модули)
   addModifiersFromItem(equipment.helmet);
   addModifiersFromItem(equipment.armor);
   addModifiersFromItem(equipment.clothes);
   addModifiersFromItem(equipment.weapon);
-  addModifiersFromItem(equipment.scope);
-  addModifiersFromItem(equipment.tactical);
-  addModifiersFromItem(equipment.suppressor);
+
+  // Модули (3 слота)
+  if (equipment.modules) {
+    for (const itemId of equipment.modules) {
+      addModifiersFromItem(itemId);
+    }
+  }
 
   // Карманы (все 4)
   if (equipment.pockets) {
