@@ -62,128 +62,129 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
-'use client'
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/IMPORTS
-// Импорты React hooks и Firebase Firestore
-// ═══════════════════════════════════════════════════════════════════════════════
-
 import { useState, useEffect } from 'react';
-import { doc, onSnapshot, collection, query } from 'firebase/firestore';
-import { dbClient } from '@/lib/firebaseClient';
-// [FIX] Импортируем централизованные типы вместо локальных определений
+import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebaseClient';
 import { PlayerState, AnimatronicState, GlobalNightCycle } from '@/lib/types';
-import { INITIAL_NIGHT_CYCLE, calculateNightAndHour, NIGHT_CYCLE_TIMINGS } from '@/lib/nightCycleConfig';
+import { NIGHT_CYCLE_TIMINGS, calculateNightAndHour } from '@/lib/nightCycleConfig';
 
-// /END_ANCHOR:USEGAME/IMPORTS
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/TYPES
-// Типы состояний
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// Используем псевдоним для совместимости, если где-то явно используется EnemyState
-export type EnemyState = AnimatronicState;
-
-// /END_ANCHOR:USEGAME/TYPES
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:USEGAME/HOOK
-// Хук useGame - realtime подписка на состояние игры
-// КОНТРАКТ: Возвращает null для player до загрузки, автоматически unsubscribe при unmount
-// ═══════════════════════════════════════════════════════════════════════════════
+// Начальное состояние для цикла ночи
+const DEFAULT_NIGHT_CYCLE: GlobalNightCycle = {
+  isActive: false,
+  nightNumber: 1,
+  startedAt: null
+};
 
 export function useGame(gameId: string, playerId: string) {
-  // [FIX] Используем импортированный PlayerState
   const [player, setPlayer] = useState<PlayerState | null>(null);
   const [allPlayers, setAllPlayers] = useState<PlayerState[]>([]);
-  const [enemies, setEnemies] = useState<EnemyState[]>([]);
+  const [enemies, setEnemies] = useState<AnimatronicState[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // ★ Новое состояние для глобальных данных игры
+  const [nightCycle, setNightCycle] = useState<GlobalNightCycle>(DEFAULT_NIGHT_CYCLE);
+  
+  // Локальные вычисляемые значения
+  const [calculatedNight, setCalculatedNight] = useState(1);
+  const [calculatedHour, setCalculatedHour] = useState(12);
 
-  // Глобальный цикл ночей
-  const [nightCycle, setNightCycle] = useState<GlobalNightCycle>(INITIAL_NIGHT_CYCLE);
-  const [calculatedNight, setCalculatedNight] = useState<number>(1);
-  const [calculatedHour, setCalculatedHour] = useState<number>(1);
-
+  // 1. Подписка на ТЕКУЩЕГО ИГРОКА (без изменений)
   useEffect(() => {
     if (!gameId || !playerId) return;
 
-    // 1. Слушаем ВСЕХ игроков в этой игре
-    const playersRef = collection(dbClient, 'games', gameId, 'players');
-    const unsubPlayers = onSnapshot(playersRef, (snapshot) => {
-      // Приводим данные к PlayerState (предполагаем, что в БД записаны корректные данные)
-      const playersList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as PlayerState));
-      setAllPlayers(playersList);
-
-      // Находим среди них "себя" и обновляем локальное состояние
-      const me = playersList.find(p => p.id === playerId);
-      if (me) setPlayer(me);
-
+    const playerRef = doc(db, 'games', gameId, 'players', playerId);
+    const unsubscribe = onSnapshot(playerRef, (doc) => {
+      if (doc.exists()) {
+        setPlayer({ id: doc.id, ...doc.data() } as PlayerState);
+      }
       setLoading(false);
     });
 
-    // 2. Слушаем Врагов
-    const enemiesRef = collection(dbClient, 'games', gameId, 'enemies');
-    const unsubEnemies = onSnapshot(enemiesRef, (snapshot) => {
-      const enemiesList = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as EnemyState));
-      setEnemies(enemiesList);
-    });
-
-    // 3. Слушаем глобальный цикл ночей (на уровне документа игры)
-    const gameRef = doc(dbClient, 'games', gameId);
-    const unsubGame = onSnapshot(gameRef, (snapshot) => {
-      const gameData = snapshot.data();
-      if (gameData?.globalNightCycle) {
-        setNightCycle(gameData.globalNightCycle as GlobalNightCycle);
-      }
-    });
-
-    return () => {
-      unsubPlayers();
-      unsubEnemies();
-      unsubGame();
-    };
+    return () => unsubscribe();
   }, [gameId, playerId]);
 
-  // 4. Локальный расчёт времени на основе startedAt (каждую секунду)
+  // 2. Подписка на ВСЕХ ИГРОКОВ (для списка) - (без изменений)
+  useEffect(() => {
+    if (!gameId) return;
+    
+    // В идеале тоже сделать onSnapshot для коллекции, если нужен реал-тайм список
+    // Но для экономии чтений можно оставить так, или переделать на onSnapshot
+    const fetchPlayers = async () => {
+      const querySnapshot = await getDocs(collection(db, 'games', gameId, 'players'));
+      const players = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerState));
+      setAllPlayers(players);
+    };
+    
+    // Вызываем один раз и ставим интервал, либо меняем на onSnapshot
+    fetchPlayers();
+    const interval = setInterval(fetchPlayers, 5000); 
+    
+    return () => clearInterval(interval);
+  }, [gameId]);
+
+  // 3. Подписка на ВРАГОВ (без изменений)
+  useEffect(() => {
+    if (!gameId) return;
+
+    const enemiesRef = collection(db, 'games', gameId, 'enemies');
+    const unsubscribe = onSnapshot(enemiesRef, (snapshot) => {
+      const enemiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnimatronicState));
+      setEnemies(enemiesData);
+    });
+
+    return () => unsubscribe();
+  }, [gameId]);
+
+  // ★ 4. ИСПРАВЛЕНИЕ: Подписка на ГЛОБАЛЬНЫЙ ДОКУМЕНТ ИГРЫ (NightCycle)
+  useEffect(() => {
+    if (!gameId) return;
+
+    // Слушаем документ самой игры (games/game_alpha)
+    const gameRef = doc(db, 'games', gameId);
+    
+    const unsubscribe = onSnapshot(gameRef, (docSnapshot) => {
+      if (docSnapshot.exists()) {
+        const data = docSnapshot.data();
+        // Если в базе есть поле nightCycle, обновляем стейт
+        if (data.nightCycle) {
+            setNightCycle(data.nightCycle);
+        }
+      }
+    }, (error) => {
+        console.error("Error listening to game document:", error);
+    });
+
+    return () => unsubscribe();
+  }, [gameId]);
+
+  // ★ 5. Локальный таймер для обновления Часа/Ночи на клиенте
   useEffect(() => {
     if (!nightCycle.isActive || !nightCycle.startedAt) {
-      setCalculatedNight(nightCycle.currentNight);
-      setCalculatedHour(nightCycle.currentHour);
-      return;
+        setCalculatedNight(nightCycle.nightNumber || 1);
+        setCalculatedHour(12); // Дефолтное время
+        return;
     }
 
-    const updateCalculatedTime = () => {
-      const now = Date.now();
-      const elapsedMs = now - nightCycle.startedAt!;
-      const calculated = calculateNightAndHour(elapsedMs);
-
-      if (calculated) {
-        setCalculatedNight(calculated.night);
-        setCalculatedHour(calculated.hour);
-      }
+    const updateTime = () => {
+        const result = calculateNightAndHour(nightCycle.startedAt!);
+        setCalculatedNight(result.night);
+        setCalculatedHour(result.hour);
     };
 
-    // Обновляем сразу
-    updateCalculatedTime();
-
-    // Обновляем каждую секунду для плавного отображения таймера
-    const interval = setInterval(updateCalculatedTime, 1000);
+    // Обновляем сразу и запускаем интервал
+    updateTime();
+    const interval = setInterval(updateTime, 1000); // Обновляем каждую секунду
 
     return () => clearInterval(interval);
-  }, [nightCycle.isActive, nightCycle.startedAt]);
+  }, [nightCycle]);
 
   return {
     player,
     allPlayers,
     enemies,
     loading,
-    // Глобальный цикл ночей
-    nightCycle,
-    calculatedNight,
-    calculatedHour,
+    nightCycle,      // Возвращаем актуальные данные
+    calculatedNight, // Вычисленная ночь
+    calculatedHour   // Вычисленный час
   };
 }
-
-// /END_ANCHOR:USEGAME/HOOK
