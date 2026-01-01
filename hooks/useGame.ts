@@ -68,11 +68,15 @@ import { dbClient } from '@/lib/firebaseClient';
 import { PlayerState, AnimatronicState, GlobalNightCycle } from '@/lib/types';
 import { NIGHT_CYCLE_TIMINGS, calculateNightAndHour } from '@/lib/nightCycleConfig';
 
-// Начальное состояние для цикла ночи
+// ★ ИСПРАВЛЕНО: Объект теперь соответствует интерфейсу GlobalNightCycle из types.ts
 const DEFAULT_NIGHT_CYCLE: GlobalNightCycle = {
   isActive: false,
-  nightNumber: 1,
-  startedAt: null
+  currentNight: 1,      // Было nightNumber
+  currentHour: 12,      // Добавлено (обязательное поле)
+  startedAt: null,
+  timerEndAt: null,     // Добавлено (обязательное поле)
+  lastHourUpdateAt: null, // Добавлено (обязательное поле)
+  lastNightUpdateAt: null // Добавлено (обязательное поле)
 };
 
 export function useGame(gameId: string, playerId: string) {
