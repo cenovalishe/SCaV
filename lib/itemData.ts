@@ -190,7 +190,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Золотой Фредди',
     type: 'valuable',
     value: 50000,
-    width: 2, height: 2, size: 2, // 1x1
+    width: 2, height: 2, size: 4, // 2x2
     icon: '🧸'
   },
   purple_guy_note: {
@@ -221,7 +221,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Плюшевый Фокси',
     type: 'valuable',
     value: 25000,
-    width: 2, height: 2, size: 2, // 1x1
+    width: 2, height: 2, size: 4, // 2x2
     icon: '🦊'
   },
   treasure_map: {
@@ -270,7 +270,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Планшет',
     type: 'valuable',
     value: 12000,
-    width: 2, height: 2, size: 1, // 1x1
+    width: 2, height: 2, size: 4, // 2x2
     icon: '📱'
   },
   phone: {
@@ -504,7 +504,7 @@ export const ITEMS: Record<string, Item> = {
     nameRu: 'Большой рюкзак',
     type: 'equipment',
     value: 6000,
-    width: 2, height: 2, size: 1, // 1x1
+    width: 2, height: 2, size: 4, // 2x2
     icon: '🎒',
     statModifiers: { capacity: 10, speed: -1 }
   },

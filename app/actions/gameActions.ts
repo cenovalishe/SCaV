@@ -107,7 +107,8 @@ function canBacktrack(playerData: any, currentNodeId: string, targetNodeId: stri
 export async function movePlayer(
   gameId: string,
   playerId: string,
-  targetNodeId: string
+  targetNodeId: string,
+  equipment?: any // Экипировка игрока для проверки спец-слотов
 ): Promise<MoveResponse> {
   if (!dbAdmin) {
     return { success: false, message: 'Firebase not configured' };
@@ -129,6 +130,28 @@ export async function movePlayer(
 
     if (!nodeConfig || !nodeConfig.neighbors.includes(targetNodeId)) {
       return { success: false, message: "Movement blocked: No direct path!" };
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // FIX: Блокировка повторного входа в S/F без ключ-карты в спец-слоте
+    // После выхода из SF игрок не может вернуться без key_card в спец-слоте
+    // ═══════════════════════════════════════════════════════════════════════════════
+    if (targetNodeId === 'SF') {
+      const hasLeftSF = playerData?.hasLeftSF || false;
+
+      if (hasLeftSF) {
+        // Проверяем наличие key_card в спец-слоте
+        const playerEquipment = equipment || playerData?.equipment;
+        const specials = playerEquipment?.specials || [];
+        const hasKeyCard = specials.some((item: string | null) => item === 'key_card');
+
+        if (!hasKeyCard) {
+          return {
+            success: false,
+            message: "🔒 Вход заблокирован! Для возврата на Старт/Финиш требуется ключ-карта в спец-слоте снаряжения."
+          };
+        }
+      }
     }
 
     // Проверка взаимоисключающих путей
@@ -156,6 +179,9 @@ export async function movePlayer(
     const visitedNodes = playerData?.visitedNodes || [];
     const updatedVisitedNodes = [...visitedNodes, currentNodeId];
 
+    // FIX: Отслеживаем выход из SF (для блокировки повторного входа)
+    const hasLeftSF = playerData?.hasLeftSF || currentNodeId === 'SF';
+
     // 1. Сначала перемещаем игрока и сбрасываем боевые статусы
     await playerRef.update({
       currentNode: targetNodeId,
@@ -163,6 +189,7 @@ export async function movePlayer(
       currentEnemyId: null, // Сбрасываем текущего врага
       chosenBranch: newChosenBranch,
       hasReachedY: hasReachedY,
+      hasLeftSF: hasLeftSF, // FIX: Флаг выхода из SF
       visitedNodes: updatedVisitedNodes,
       lastUpdated: FieldValue.serverTimestamp()
     });
@@ -298,7 +325,6 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
       status: "IDLE",
       stats: {
         hp: 100,
-        san: 100,
         stamina: 7,
         maxStamina: 7,
         stealth: 0,      // Скрытность: 0
@@ -312,6 +338,7 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
       inventory: [],     // Пустой инвентарь
       chosenBranch: null,
       hasReachedY: false,
+      hasLeftSF: false,  // FIX: Изначально игрок не покидал SF
       visitedNodes: []
     };
 

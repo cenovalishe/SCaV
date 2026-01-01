@@ -47,15 +47,15 @@ interface SlotConfig {
   subCellsCount?: number; // Количество подъячеек (для 2x2 = 4)
 }
 
-// Конфигурация слотов рюкзака: два слота 2x2 (с подъячейками), один 2x1, три 1x1
-// Слоты 2x2 содержат 4 подъячейки каждый, что даёт гибкость размещения
+// Конфигурация слотов рюкзака: два слота 2x2 (с подъячейками), один 2x1 (с подъячейками), три 1x1
+// Слоты 2x2 содержат 4 подъячейки каждый, слот 2x1 содержит 2 подъячейки
 const BACKPACK_SLOTS: SlotConfig[] = [
   { size: '2x2', index: 0, subCellsCount: 4 },  // Индексы подъячеек: 0-3
   { size: '2x2', index: 1, subCellsCount: 4 },  // Индексы подъячеек: 4-7
-  { size: '2x1', index: 2 },
-  { size: '1x1', index: 3 },
-  { size: '1x1', index: 4 },
-  { size: '1x1', index: 5 },
+  { size: '2x1', index: 2, subCellsCount: 2 },  // Индексы подъячеек: 8-9
+  { size: '1x1', index: 3 },                     // Индекс: 10
+  { size: '1x1', index: 4 },                     // Индекс: 11
+  { size: '1x1', index: 5 },                     // Индекс: 12
 ];
 
 // Конфигурация слотов разгрузки: один слот 2x2 (с подъячейками)
@@ -145,9 +145,8 @@ function SubCellSlot2x2({
         }
 
         // FIX: Безопасная проверка размера (item.size || 0)
-        // Для предметов 2x2 - рендерим на все 4 ячейки
-        if (item && (item.size || 0) >= 4) {
-          if (i !== 0) return null;
+        // Для предметов 2x2 - рендерим на все 4 ячейки (только в первой ячейке)
+        if (item && (item.size || 0) >= 4 && i === 0) {
           return (
             <div
               key={i}
@@ -170,11 +169,13 @@ function SubCellSlot2x2({
           );
         }
 
-        // FIX: Безопасная проверка размера (item.size || 0)
-        // Для предметов 2x1 - рендерим на 2 ячейки (горизонтально или вертикально)
+        // FIX: Безопасная проверка размера для предметов 2x1 (горизонтальные) и 1x2 (вертикальные)
         if (item && (item.size || 0) === 2) {
-          const isHorizontal = i === 0 || i === 2; // Верхний или нижний ряд
-          if (isHorizontal) {
+          const isHorizontal = (item.width || 1) === 2 && (item.height || 1) === 1;
+          const isVertical = (item.width || 1) === 1 && (item.height || 1) === 2;
+
+          // Горизонтальный предмет (2x1) - рендерим если в левой ячейке ряда (0 или 2)
+          if (isHorizontal && (i === 0 || i === 2)) {
             return (
               <div
                 key={i}
@@ -186,15 +187,158 @@ function SubCellSlot2x2({
                 className={`
                   col-span-2 flex items-center justify-center
                   bg-black/30 border border-white/10 rounded cursor-pointer
-                  hover:scale-[1.02] hover:border-white/10 transition-all
+                  hover:scale-[1.02] hover:border-white/20 transition-all
                   ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
                 `}
-                title={item ? `${item.nameRu} (${item.size || 2} ячеек)` : undefined}
+                title={item ? `${item.nameRu} (2x1)` : undefined}
               >
                 <span className="text-2xl drop-shadow-md">{item.icon}</span>
               </div>
             );
           }
+
+          // Вертикальный предмет (1x2) - рендерим если в верхней ячейке колонки (0 или 1)
+          if (isVertical && (i === 0 || i === 1)) {
+            return (
+              <div
+                key={i}
+                draggable={!!item}
+                onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+                onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+                onDrop={(e) => onDrop?.(e, i)}
+                onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+                className={`
+                  row-span-2 flex items-center justify-center
+                  bg-black/30 border border-white/10 rounded cursor-pointer
+                  hover:scale-[1.02] hover:border-white/20 transition-all
+                  ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+                `}
+                style={{ gridColumn: i === 0 ? 1 : 2, gridRow: '1 / 3' }}
+                title={item ? `${item.nameRu} (1x2)` : undefined}
+              >
+                <span className="text-2xl drop-shadow-md">{item.icon}</span>
+              </div>
+            );
+          }
+        }
+
+        // Стандартная ячейка 1x1
+        return (
+          <div
+            key={i}
+            draggable={!!item}
+            onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+            onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+            onDrop={(e) => onDrop?.(e, i)}
+            onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+            className={`
+              flex items-center justify-center
+              bg-black/30 border border-white/10 rounded cursor-pointer
+              hover:border-white/20 transition-all
+              ${isDragOver ? 'border-green-400 bg-green-900/30 scale-105' : ''}
+              ${item ? 'hover:scale-[1.02]' : ''}
+            `}
+            style={{ width: SLOT_BASE_SIZE - 4, height: SLOT_BASE_SIZE - 4 }}
+            title={item ? `${item.nameRu}` : '1x1'}
+          >
+            {item ? (
+              <span className="text-xl drop-shadow-md">{item.icon}</span>
+            ) : (
+              <div className="text-white/10 text-[8px] font-mono">1x1</div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Компонент слота 2x1 с двумя подъячейками 1x1 (горизонтальный)
+function SubCellSlot2x1({
+  items,
+  color = 'zinc',
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onClick,
+  dragOverTarget,
+  baseIndex
+}: {
+  items: (string | null)[]; // 2 подъячейки
+  color?: 'zinc' | 'red' | 'blue' | 'orange';
+  onDragStart?: (e: DragEvent, itemId: string, subCellIndex: number) => void;
+  onDragOver?: (e: DragEvent, subCellIndex: number) => void;
+  onDrop?: (e: DragEvent, subCellIndex: number) => void;
+  onClick?: (e: MouseEvent, itemId: string, subCellIndex: number) => void;
+  dragOverTarget?: number | null;
+  baseIndex: number;
+}) {
+  const colorSchemes = {
+    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15', highlight: 'border-white/30' },
+    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30', highlight: 'border-red-400/50' },
+    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30', highlight: 'border-blue-400/50' },
+    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30', highlight: 'border-orange-400/50' },
+  };
+  const scheme = colorSchemes[color];
+
+  // Анализируем какие предметы занимают какие ячейки
+  const cellContents: { itemId: string | null; isMain: boolean; size: number }[] = [];
+  const processedItems = new Set<string>();
+
+  for (let i = 0; i < 2; i++) {
+    const itemId = items[i];
+    if (!itemId) {
+      cellContents[i] = { itemId: null, isMain: true, size: 1 };
+      continue;
+    }
+
+    if (processedItems.has(itemId)) {
+      cellContents[i] = { itemId, isMain: false, size: 1 };
+      continue;
+    }
+
+    const item = getItemById(itemId);
+    const itemSize = item?.size || 1;
+    processedItems.add(itemId);
+    cellContents[i] = { itemId, isMain: true, size: itemSize };
+  }
+
+  return (
+    <div
+      className={`flex gap-0.5 p-0.5 bg-gradient-to-br ${scheme.bg} border ${scheme.border} rounded`}
+      style={{ width: SLOT_BASE_SIZE * 2 + SLOT_GAP, height: SLOT_BASE_SIZE }}
+    >
+      {cellContents.map((cell, i) => {
+        const item = cell.itemId ? getItemById(cell.itemId) : null;
+        const isDragOver = dragOverTarget === baseIndex + i;
+
+        // Пропускаем рендер вторичных ячеек больших предметов
+        if (!cell.isMain && cell.itemId) {
+          return <div key={i} className="w-full h-full" />;
+        }
+
+        // Горизонтальный предмет (2x1) - занимает обе ячейки
+        if (item && (item.size || 0) === 2 && (item.width || 1) === 2 && i === 0) {
+          return (
+            <div
+              key={i}
+              draggable={!!item}
+              onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+              onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+              onDrop={(e) => onDrop?.(e, i)}
+              onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+              className={`
+                flex-1 flex items-center justify-center
+                bg-black/30 border border-white/10 rounded cursor-pointer
+                hover:scale-[1.02] hover:border-white/20 transition-all
+                ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+              `}
+              style={{ width: SLOT_BASE_SIZE * 2 - 4, height: SLOT_BASE_SIZE - 4 }}
+              title={item ? `${item.nameRu} (2x1)` : undefined}
+            >
+              <span className="text-2xl drop-shadow-md">{item.icon}</span>
+            </div>
+          );
         }
 
         // Стандартная ячейка 1x1
@@ -423,9 +567,78 @@ export default function InventoryTab({
   }, []);
 
   // ════════════════════════════════════════════════════════════════════════
-  // FIX: Исправленная функция Drop с поддержкой спец-слотов, защитой от дюпа
-  // и обменом предметами при перемещении на занятую ячейку
+  // FIX v3: Корректная обработка размеров слотов (2x2, 2x1, 1x1)
+  // Слоты рюкзака: 0-3 (2x2), 4-7 (2x2), 8-9 (2x1), 10-12 (1x1)
+  // Слоты разгрузки/сумки: 0-3 (2x2)
   // ════════════════════════════════════════════════════════════════════════
+
+  // Определяем тип слота и его границы по индексу для рюкзака
+  const getBackpackSlotInfo = (index: number): { type: '2x2' | '2x1' | '1x1'; baseIndex: number; localIndex: number } => {
+    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
+    if (index < 8) return { type: '2x2', baseIndex: 4, localIndex: index - 4 };
+    if (index < 10) return { type: '2x1', baseIndex: 8, localIndex: index - 8 };
+    return { type: '1x1', baseIndex: index, localIndex: 0 };
+  };
+
+  // Определяем тип слота для разгрузки/сумки (только 2x2)
+  const getContainerSlotInfo = (index: number): { type: '2x2' | '1x1'; baseIndex: number; localIndex: number } => {
+    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
+    return { type: '1x1', baseIndex: index, localIndex: 0 };
+  };
+
+  // Вспомогательная функция для получения индексов, занимаемых предметом
+  const getOccupiedIndices = (
+    localIndex: number,
+    item: Item | undefined,
+    slotType: '2x2' | '2x1' | '1x1',
+    baseIndex: number
+  ): number[] => {
+    if (!item) return [baseIndex + localIndex];
+
+    const itemWidth = item.width || 1;
+    const itemHeight = item.height || 1;
+    const itemSize = item.size || 1;
+
+    // Для 1x1 слотов - только один индекс
+    if (slotType === '1x1') {
+      return [baseIndex];
+    }
+
+    // Для 2x1 слотов - горизонтальный ряд
+    if (slotType === '2x1') {
+      // 2x1 предмет занимает обе ячейки
+      if (itemWidth === 2 && itemHeight === 1) {
+        return [baseIndex, baseIndex + 1];
+      }
+      // 1x1 предмет - одна ячейка
+      return [baseIndex + localIndex];
+    }
+
+    // Для 2x2 слотов - сетка 2x2
+    // Сетка: [0, 1]
+    //        [2, 3]
+    const indices: number[] = [];
+    const startX = localIndex % 2;
+    const startY = Math.floor(localIndex / 2);
+
+    for (let y = 0; y < itemHeight; y++) {
+      for (let x = 0; x < itemWidth; x++) {
+        const cellX = startX + x;
+        const cellY = startY + y;
+        if (cellX < 2 && cellY < 2) {
+          indices.push(baseIndex + cellY * 2 + cellX);
+        }
+      }
+    }
+
+    return indices.length > 0 ? indices : [baseIndex + localIndex];
+  };
+
+  // Очищает все ячейки, занятые предметом в контейнере
+  const clearItemFromContainer = (container: Container, itemId: string) => {
+    container.items = container.items.map(item => item === itemId ? null : item);
+  };
+
   const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
     e.preventDefault();
     if (!dragSource || !onEquipmentChange) {
@@ -434,6 +647,7 @@ export default function InventoryTab({
     }
 
     const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+    const draggedItem = getItemById(dragSource.itemId);
 
     // --- 0. ПОЛУЧАЕМ ПРЕДМЕТ В ЦЕЛЕВОЙ ЯЧЕЙКЕ (для обмена) ---
     let targetItemId: string | null = null;
@@ -453,21 +667,25 @@ export default function InventoryTab({
       targetItemId = (newEquipment as any)[target] || null;
     }
 
-    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА (и размещение предмета из цели, если был) ---
+    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
     if (dragSource.type === 'container' && dragSource.containerType) {
       const container = newEquipment[dragSource.containerType];
-      if (container && dragSource.index !== undefined) {
-        container.items[dragSource.index] = targetItemId; // Обмен: кладём предмет из цели
+      if (container) {
+        // Очищаем все ячейки, занятые этим предметом
+        clearItemFromContainer(container, dragSource.itemId);
+        // Если есть предмет для обмена, размещаем его в первую свободную ячейку источника
+        if (targetItemId && dragSource.index !== undefined) {
+          container.items[dragSource.index] = targetItemId;
+        }
       }
     } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
       newEquipment.pockets[dragSource.index] = targetItemId; // Обмен
     } else if (dragSource.type === 'equipment' && dragSource.slot) {
-      // FIX: Проверяем, является ли слот специальным
       if (dragSource.slot.startsWith('special')) {
         const idx = parseInt(dragSource.slot.replace('special', ''));
-        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId; // Обмен
+        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId;
       } else {
-        (newEquipment as any)[dragSource.slot] = targetItemId; // Обмен
+        (newEquipment as any)[dragSource.slot] = targetItemId;
       }
     }
 
@@ -475,13 +693,40 @@ export default function InventoryTab({
     if (['rig', 'bag', 'backpack'].includes(target)) {
       const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
       if (container && index !== undefined) {
-        container.items[index] = dragSource.itemId;
+        // Определяем тип слота в зависимости от контейнера
+        const slotInfo = target === 'backpack'
+          ? getBackpackSlotInfo(index)
+          : getContainerSlotInfo(index);
+
+        // Получаем индексы всех ячеек, которые займёт предмет
+        const occupiedIndices = getOccupiedIndices(
+          slotInfo.localIndex,
+          draggedItem,
+          slotInfo.type,
+          slotInfo.baseIndex
+        );
+
+        // Очищаем целевые ячейки от других предметов (если там что-то было)
+        for (const absIdx of occupiedIndices) {
+          if (absIdx < container.items.length && container.items[absIdx] !== dragSource.itemId) {
+            const existingItem = container.items[absIdx];
+            if (existingItem) {
+              clearItemFromContainer(container, existingItem);
+            }
+          }
+        }
+
+        // Размещаем предмет во все занимаемые ячейки
+        for (const absIdx of occupiedIndices) {
+          if (absIdx < container.items.length) {
+            container.items[absIdx] = dragSource.itemId;
+          }
+        }
       }
     } else if (target.startsWith('pocket')) {
       const pocketIndex = parseInt(target.replace('pocket', ''));
       newEquipment.pockets[pocketIndex] = dragSource.itemId;
     } else if (target.startsWith('special')) {
-      // FIX: Обработка добавления в спец-слоты
       const idx = parseInt(target.replace('special', ''));
       if (newEquipment.specials) newEquipment.specials[idx] = dragSource.itemId;
     } else {
@@ -780,9 +1025,8 @@ export default function InventoryTab({
               </div>
               <div className="flex gap-1 flex-wrap">
                 {BACKPACK_SLOTS.map((slot) => {
-                  if (slot.subCellsCount) {
-                    // Рассчитываем правильные индексы для подъячеек рюкзака
-                    // Первый слот 2x2: индексы 0-3, Второй слот 2x2: индексы 4-7
+                  // Слоты 2x2 (индексы 0, 1): ячейки 0-3 и 4-7
+                  if (slot.subCellsCount === 4) {
                     const baseIdx = slot.index * 4;
                     const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 4) || [null, null, null, null];
                     return (
@@ -799,10 +1043,26 @@ export default function InventoryTab({
                       />
                     );
                   }
-                  // Обычные слоты (2x1, 1x1) - индексы идут после слотов 2x2
-                  // Слот 2x1 (index 2): реальный индекс 8
-                  // Слоты 1x1 (index 3,4,5): реальные индексы 9,10,11
-                  const realIndex = slot.index < 2 ? slot.index : 8 + (slot.index - 2);
+                  // Слот 2x1 (индекс 2): ячейки 8-9
+                  if (slot.subCellsCount === 2) {
+                    const baseIdx = 8; // После двух слотов 2x2 (0-3, 4-7)
+                    const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 2) || [null, null];
+                    return (
+                      <SubCellSlot2x1
+                        key={slot.index}
+                        items={subCellItems}
+                        color="orange"
+                        baseIndex={baseIdx}
+                        onDragStart={(e, itemId, subIdx) => handleDragStart(e, itemId, 'backpack', baseIdx + subIdx)}
+                        onDragOver={(e, subIdx) => handleDragOver(e, 'backpack', baseIdx + subIdx)}
+                        onDrop={(e, subIdx) => handleDrop(e, 'backpack', baseIdx + subIdx)}
+                        onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'backpack', baseIdx + subIdx)}
+                        dragOverTarget={dragOverTarget?.type === 'backpack' ? dragOverTarget.index ?? null : null}
+                      />
+                    );
+                  }
+                  // Слоты 1x1 (индексы 3, 4, 5): ячейки 10, 11, 12
+                  const realIndex = 10 + (slot.index - 3);
                   return (
                     <VariableSlot
                       key={slot.index}
