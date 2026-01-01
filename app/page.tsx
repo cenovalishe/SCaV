@@ -392,12 +392,11 @@ export default function GameBoard() {
     setSelectedNode(node);
   }, []);
 
-  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ
+  // ★ ИСПРАВЛЕНО: Обработка внезапных встреч после перемещения
   const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
     if (!playerId) return;
 
     try {
-      // 1. Списываем выносливость (если не пропущено, например, после побега)
       if (!skipStaminaCost) {
         const updateRes = await updateStamina(GAME_ID, playerId, -staminaCost);
         if (!updateRes.success) {
@@ -406,24 +405,30 @@ export default function GameBoard() {
         }
       }
 
-      // 2. Вызываем Server Action для перемещения
       const result = await movePlayer(GAME_ID, playerId, targetNodeId, equipment);
 
       if (result.success) {
         addLogEntry(result.message, 'system');
         
-        // 3. Обработка особых событий после перемещения
+        // 3. Обработка внезапных встреч (если сервер обнаружил врага уже ПОСЛЕ перемещения)
         if (result.event === 'ENEMY_ENCOUNTER' && result.collision?.hasCollision) {
            addLogEntry(`⚠️ ВНЕЗАПНАЯ ВСТРЕЧА: ${result.collision.enemyType}!`, 'combat');
+           
+           // Запускаем боевую систему
+           setEncounter({
+             active: true,
+             enemyName: result.collision.enemyType || 'Enemy',
+             enemyType: result.collision.enemyType || 'default',
+             pendingMove: null, // Мы УЖЕ переместились
+             staminaCost: 0,    // Стамина уже потрачена
+             previousNode: null // Отступать будем по логике поражения
+           });
         }
       } else {
         addLogEntry(result.message, 'system');
-        // Если перемещение не удалось (заблокировано), возвращаем выносливость
         if (!skipStaminaCost) {
              await updateStamina(GAME_ID, playerId, staminaCost);
         }
-        
-        // Показываем попап блокировки S/F, если это причина отказа
         if (result.message.includes('Вход заблокирован')) {
            setSfBlockedPopup({ active: true, message: result.message });
         }
@@ -518,12 +523,26 @@ export default function GameBoard() {
     setPvpEncounter(null);
   }, [pvpEncounter, addLogEntry]);
 
+  // ★ ИСПРАВЛЕНО: Обработка смерти в офисе
   const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
     setOfficeMechanic(null);
+    
     if (result.damageReceived > 0) {
-      await applyDamage(GAME_ID, playerId!, result.damageReceived);
-      addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+      // Наносим урон и ПРОВЕРЯЕМ результат (умер ли игрок?)
+      const damageResult = await applyDamage(GAME_ID, playerId!, result.damageReceived);
+      
+      if (damageResult.success) {
+         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+         
+         // Если урон стал фатальным
+         if (damageResult.isDefeated) {
+            addLogEntry('💀 Вы погибли от рук аниматроника в Офисе...', 'combat');
+            await handleAnimatronicDefeat(GAME_ID, playerId!);
+            return; // Прерываем выполнение, награду не выдаем
+         }
+      }
     }
+    
     if (result.receivedKeyCard) {
         addLogEntry('🗝️ Получена ключ-карта!', 'loot');
     } else {
