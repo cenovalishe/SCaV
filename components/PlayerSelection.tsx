@@ -14,12 +14,13 @@ import React, { useState } from 'react';
 
 // Фиксированные 6 игроков
 export const PLAYER_SLOTS = [
-  { id: 'player_1', name: 'Дикий Альфа', nameEn: 'Wild Alpha', color: '#A855F7' },
-  { id: 'player_2', name: 'Дикий Браво', nameEn: 'Wild Bravo', color: '#22C55E' },
-  { id: 'player_3', name: 'Дикий Чарли', nameEn: 'Wild Charlie', color: '#F97316' },
-  { id: 'player_4', name: 'Дикий Дельта', nameEn: 'Wild Delta', color: '#06B6D4' },
-  { id: 'player_5', name: 'Дикий Эхо', nameEn: 'Wild Echo', color: '#EC4899' },
-  { id: 'player_6', name: 'Дикий Фокстрот', nameEn: 'Wild Foxtrot', color: '#84CC16' },
+  { id: 'player_shoker', name: 'Егор Шокеридзе', nameEn: 'Egor Shokeridze', color: '#A855F7' },
+  { id: 'player_manki', name: 'Сева Пармезан', nameEn: 'Seva Parmezan', color: '#22C55E' },
+  { id: 'player_sunekoi', name: 'Толя Самара', nameEn: 'Toly Samara', color: '#800000' },
+  { id: 'player_marenyuk', name: 'Иван Кимпентяо', nameEn: 'Ivan Kimpentyao', color: '#DAA520' },
+  { id: 'player_smailgames', name: 'Ильяс Вахта', nameEn: 'Ilyas Vaxta', color: '#32CD32' },
+  { id: 'player_malekith', name: 'Макс Гребень', nameEn: 'Max Greben', color: '#FF7F50' },
+  { id: 'player_cenoval', name: 'Гоша Грибок', nameEn: 'Gosha Gribok', color: '#A0522D' },
 ];
 
 interface PlayerSelectionProps {
@@ -49,12 +50,12 @@ export default function PlayerSelection({ takenSlots, onSelectPlayer }: PlayerSe
             ВЫБОР ПЕРСОНАЖА
           </h1>
           <p className="text-white/50 font-mono text-sm">
-            Выберите одного из 6 диких (scavs) для игры
+            Выберите одного из 7 диких (scavs) для игры
           </p>
         </div>
 
         {/* Сетка игроков */}
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           {PLAYER_SLOTS.map((slot) => {
             const isTaken = takenSlots.includes(slot.id);
             const isSelected = selectedSlot === slot.id;
@@ -128,7 +129,7 @@ export default function PlayerSelection({ takenSlots, onSelectPlayer }: PlayerSe
         {/* Информация */}
         <div className="mt-8 text-center">
           <p className="text-white/30 font-mono text-xs">
-            Доступно слотов: {6 - takenSlots.length} / 6
+            Доступно слотов: {7 - takenSlots.length} / 7
           </p>
         </div>
       </div>
