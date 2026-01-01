@@ -53,7 +53,6 @@ const STAT_LABELS: Record<string, { ru: string; icon: string; color: string }> =
   speed: { ru: 'СКР', icon: '💨', color: 'text-cyan-400' },
   stealth: { ru: 'СКРТ', icon: '👁️', color: 'text-purple-400' },
   luck: { ru: 'УДЧ', icon: '🍀', color: 'text-green-400' },
-  capacity: { ru: 'ВМС', icon: '🎒', color: 'text-amber-400' },
 };
 
 function getStatColor(value: number): string {
@@ -143,7 +142,7 @@ function CharacterTabReadOnly({ stats, playerName, equipment }: {
         </div>
 
         <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto">
-          {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as const).map((statKey) => {
+          {(['attack', 'defense', 'speed', 'stealth', 'luck'] as const).map((statKey) => {
             const label = STAT_LABELS[statKey];
             const baseValue = stats[statKey];
             const effectiveValue = effectiveStats[statKey];

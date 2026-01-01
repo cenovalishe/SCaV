@@ -36,7 +36,6 @@ const STAT_LABELS: Record<keyof Omit<CharacterStats, 'maxHp' | 'maxStamina'>, { 
   speed: { ru: 'СКР', icon: '💨', color: 'text-cyan-400' },
   stealth: { ru: 'СКР', icon: '👁️', color: 'text-purple-400' },
   luck: { ru: 'УДЧ', icon: '🍀', color: 'text-green-400' },
-  capacity: { ru: 'ВМС', icon: '🎒', color: 'text-amber-400' },
   hp: { ru: 'ХП', icon: '❤️', color: 'text-red-500' },
   stamina: { ru: 'ВЫН', icon: '⚡', color: 'text-yellow-400' }
 };
@@ -138,7 +137,7 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
 
         {/* Статы в одной колонке */}
         <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar">
-          {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as const).map((statKey) => {
+          {(['attack', 'defense', 'speed', 'stealth', 'luck'] as const).map((statKey) => {
             const label = STAT_LABELS[statKey];
             const baseValue = stats[statKey];
             const effectiveValue = effectiveStats[statKey];

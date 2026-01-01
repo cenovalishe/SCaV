@@ -33,11 +33,41 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
+/**
+ * ═══════════════════════════════════════════════════════════════════════════════
+ * FILE MANIFEST: app/page.tsx
+ * ═══════════════════════════════════════════════════════════════════════════════
+ *
+ * PURPOSE: Главная страница игры SCaV (REDESIGNED v2.2)
+ *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ FEATURES v2.2                                                               │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ - FIX: Исправлена ошибка типов в handleEncounterComplete (result.survived) │
+ * │ - Логика выживания перенесена на клиент (проверка результата applyDamage)  │
+ * │ - Night Cycle UI интегрирован в CameraView (HUD)                           │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
+ * ═══════════════════════════════════════════════════════════════════════════════
+ */
+
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGame } from '@/hooks/useGame';
-import { getOrCreatePlayer, updateStamina, applyDamage, lootLocation, startNewTurnForAll, getTakenPlayerSlots, createPlayerInSlot, respawnEnemiesIfNeeded, handleAnimatronicDefeat, updateEquipment } from '@/app/actions/gameActions';
+import { 
+  getOrCreatePlayer, 
+  updateStamina, 
+  applyDamage, 
+  lootLocation, 
+  startNewTurnForAll, 
+  getTakenPlayerSlots, 
+  createPlayerInSlot, 
+  respawnEnemiesIfNeeded, 
+  handleAnimatronicDefeat,
+  movePlayer,
+  givePlayerItem // ★ ДОБАВЛЕНО
+} from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
 import { CharacterStats, Equipment, GameLogEntry, AnimatronicState, PlayerState as PlayerStateType } from '@/lib/types';
 import { getItemById, calculateEffectiveStats } from '@/lib/itemData';
@@ -53,24 +83,23 @@ import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 import OfficeMechanic from '@/components/OfficeMechanic';
 import PlayerInspectModal from '@/components/PlayerInspectModal';
-// NightCycleDisplay теперь импортируется внутри CameraView, но инициализация нужна здесь
+import AdminTimeControls from '@/components/AdminTimeControls'; // ★ ДОБАВЛЕНО
 import { initializeNightCycle } from '@/app/actions/nightCycleActions';
 
-// Дефолтные значения
+// Дефолтные значения (capacity удален)
 const DEFAULT_STATS: CharacterStats = {
   attack: 1,
   defense: 1,
   speed: 1,
   stealth: 0,
   luck: 0,
-  capacity: 20,
   hp: 100,
   maxHp: 100,
   stamina: 7,
   maxStamina: 7
 };
 
-// ★ Стартовая экипировка - ПУСТАЯ
+// Стартовая экипировка - ПУСТАЯ
 const DEFAULT_EQUIPMENT: Equipment = {
   helmet: null,
   armor: null,
@@ -102,13 +131,13 @@ export default function GameBoard() {
   const [needsSlotSelection, setNeedsSlotSelection] = useState(false);
   const [takenSlots, setTakenSlots] = useState<string[]>([]);
 
-  // ★ Динамическая экипировка
+  // Динамическая экипировка
   const [equipment, setEquipment] = useState<Equipment>(DEFAULT_EQUIPMENT);
 
-  // ★ Найденный предмет (для анимации)
+  // Найденный предмет (для анимации)
   const [foundItem, setFoundItem] = useState<{ icon: string; name: string } | null>(null);
 
-  // ★ Лут рулетка
+  // Лут рулетка
   const [lootRoulette, setLootRoulette] = useState<{ active: boolean; possibleItems: string[] } | null>(null);
 
   // Состояние встречи с аниматроником
@@ -131,13 +160,13 @@ export default function GameBoard() {
   // Состояние лутинга
   const [isLooting, setIsLooting] = useState(false);
 
-  // ★ Состояние механики офиса
+  // Состояние механики офиса
   const [officeMechanic, setOfficeMechanic] = useState<{ active: boolean } | null>(null);
 
-  // ★ Состояние попапа блокировки S/F
+  // Состояние попапа блокировки S/F
   const [sfBlockedPopup, setSfBlockedPopup] = useState<{ active: boolean; message: string } | null>(null);
 
-  // ★ Состояние модалки осмотра игрока
+  // Состояние модалки осмотра игрока
   const [inspectingPlayer, setInspectingPlayer] = useState<PlayerStateType | null>(null);
 
   // Функция добавления записи в лог
@@ -340,7 +369,7 @@ export default function GameBoard() {
     gameLog: []
   }));
 
-  // Обработчики событий (CameraSwitch, Attack, Inspect, Move, Loot, etc.)
+  // Обработчики событий
   const handleCameraSwitch = useCallback((node: MapNodeData) => {
     setViewingNode(node);
     addLogEntry(`Камера переключена на: ${node.nameRu}`, 'system');
@@ -368,17 +397,72 @@ export default function GameBoard() {
     setSelectedNode(node);
   }, []);
 
+  // ★ ВЫПОЛНЕНИЕ ПЕРЕМЕЩЕНИЯ (с учетом десинка)
+  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
+    if (!playerId) return;
+
+    try {
+      // 1. Списываем выносливость
+      if (!skipStaminaCost) {
+        const updateRes = await updateStamina(GAME_ID, playerId, -staminaCost);
+        if (!updateRes.success) {
+          addLogEntry('Ошибка обновления выносливости', 'system');
+          return;
+        }
+      }
+
+      // 2. Вызываем Server Action для перемещения
+      const result = await movePlayer(GAME_ID, playerId, targetNodeId, equipment);
+
+      if (result.success) {
+        addLogEntry(result.message, 'system');
+        
+        // 3. Обработка внезапных встреч (если сервер обнаружил врага уже ПОСЛЕ перемещения)
+        if (result.event === 'ENEMY_ENCOUNTER' && result.collision?.hasCollision) {
+           addLogEntry(`⚠️ ВНЕЗАПНАЯ ВСТРЕЧА: ${result.collision.enemyType}!`, 'combat');
+           
+           // Запускаем боевую систему
+           setEncounter({
+             active: true,
+             enemyName: result.collision.enemyType || 'Enemy',
+             enemyType: result.collision.enemyType || 'default',
+             pendingMove: null, // Мы УЖЕ переместились
+             staminaCost: 0,    // Стамина уже потрачена
+             previousNode: null // Отступать будем по логике поражения
+           });
+        }
+      } else {
+        addLogEntry(result.message, 'system');
+        // Если перемещение не удалось (заблокировано), возвращаем выносливость
+        if (!skipStaminaCost) {
+             await updateStamina(GAME_ID, playerId, staminaCost);
+        }
+        
+        // Показываем попап блокировки S/F, если это причина отказа
+        if (result.message.includes('Вход заблокирован')) {
+           setSfBlockedPopup({ active: true, message: result.message });
+        }
+      }
+    } catch (error) {
+      console.error("Move error", error);
+      addLogEntry("Критическая ошибка перемещения", 'system');
+    }
+  }, [playerId, equipment, addLogEntry]);
+
+  // ★ ЗАПРОС ПЕРЕМЕЩЕНИЯ ОТ UI
   const handleMoveRequest = useCallback(async (targetNode: MapNodeData, staminaCost: number) => {
-    /* (Логика перемещения сохранена полностью, скрыта для краткости) */
-    // ... [Original move logic implementation]
-    // В реальном файле здесь должен быть полный код handleMoveRequest, как в исходнике
     if (!playerId || !player) return;
+
     if (currentStamina < staminaCost) {
       addLogEntry('Недостаточно выносливости для перемещения!', 'system');
       return;
     }
+
+    // Проверяем наличие врага в целевой точке (клиентская проверка)
     const enemyAtTarget = enemies.find(e => e.currentNode === targetNode.id);
+
     if (enemyAtTarget) {
+      // Если враг есть - запускаем систему встречи
       setEncounter({
         active: true,
         enemyName: enemyAtTarget.type,
@@ -388,32 +472,46 @@ export default function GameBoard() {
         previousNode: player.currentNode
       });
     } else {
+      // Если чисто - идем
       await executeMove(targetNode.id, staminaCost);
     }
-  }, [playerId, player, currentStamina, enemies, addLogEntry]); // + executeMove dependency
+  }, [playerId, player, currentStamina, enemies, addLogEntry, executeMove]);
 
-  const executeMove = useCallback(async (targetNodeId: string, staminaCost: number, skipStaminaCost: boolean = false) => {
-     /* (Логика executeMove сохранена полностью) */
-    if (!playerId) return;
-    try {
-        // ... [Original executeMove logic]
-        // Код из оригинального файла для executeMove
-        if (!skipStaminaCost) {
-            await updateStamina(GAME_ID, playerId, -staminaCost);
-        }
-        // ...
-        // Вызов movePlayer и обработка результата
-        // ...
-    } catch (error) {
-        console.error("Move error", error);
-    }
-  }, [playerId, equipment, addLogEntry]);
-
-
+  // ★ ЗАВЕРШЕНИЕ ВСТРЕЧИ
   const handleEncounterComplete = useCallback(async (result: EncounterResult) => {
-     /* (Логика encounter сохранена полностью) */
      if (!encounter || !playerId) return;
-     // ... [Original logic]
+     
+     let isDead = false;
+
+     // 1. Применяем урон, если он есть
+     if (result.damageReceived > 0) {
+       const damageResult = await applyDamage(GAME_ID, playerId, result.damageReceived);
+       if (damageResult.success) {
+         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+         isDead = !!damageResult.isDefeated;
+       }
+     }
+
+     // 2. Логика в зависимости от статуса (жив/мертв)
+     if (!isDead) {
+       if (result.evaded) {
+         addLogEntry(`Вы уклонились от ${encounter.enemyName}!`, 'combat');
+       } else {
+         addLogEntry(`Вы пережили атаку ${encounter.enemyName}!`, 'combat');
+       }
+
+       if (result.retreated) {
+         addLogEntry('Вы отступили назад.', 'combat');
+       } 
+       // Если мы выжили и не отступаем - завершаем движение
+       else if (encounter.pendingMove) {
+         await executeMove(encounter.pendingMove.id, encounter.staminaCost);
+       }
+     } else {
+       addLogEntry('💀 Вы были схвачены...', 'combat');
+       await handleAnimatronicDefeat(GAME_ID, playerId);
+     }
+     
      setEncounter(null);
   }, [encounter, playerId, executeMove, addLogEntry]);
 
@@ -425,66 +523,89 @@ export default function GameBoard() {
 
   const handlePvPComplete = useCallback(async (result: PvPEncounterResult) => {
     if (!pvpEncounter) return;
-    // ... [Original logic]
     if (result.outcome === 'peaceful') addLogEntry('PvP отклонен.', 'pvp');
     else addLogEntry('PvP завершен', 'pvp');
     setPvpEncounter(null);
   }, [pvpEncounter, addLogEntry]);
 
+  // ★ ЗАВЕРШЕНИЕ МЕХАНИКИ ОФИСА (Исправлено)
   const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
     setOfficeMechanic(null);
+    
+    // 1. Обработка урона
     if (result.damageReceived > 0) {
-      await applyDamage(GAME_ID, playerId!, result.damageReceived);
-      addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+      const damageResult = await applyDamage(GAME_ID, playerId!, result.damageReceived);
+      
+      if (damageResult.success) {
+         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+         if (damageResult.isDefeated) {
+            addLogEntry('💀 Вы погибли от рук аниматроника в Офисе...', 'combat');
+            await handleAnimatronicDefeat(GAME_ID, playerId!);
+            return; 
+         }
+      }
     }
+
+    // 2. Выдача карты
     if (result.receivedKeyCard) {
-        // ... логика добавления карты
-        addLogEntry('🗝️ Получена ключ-карта!', 'loot');
-    } else {
-      addLogEntry('Смена не пройдена...', 'system');
+        // ★ ВЫЗОВ СЕРВЕРНОГО ДЕЙСТВИЯ
+        const giveResult = await givePlayerItem(GAME_ID, playerId!, 'key_card');
+        
+        if (giveResult.success) {
+          addLogEntry('🗝️ Ключ-карта получена и добавлена в инвентарь!', 'loot');
+        } else {
+          addLogEntry(`⚠️ Ошибка получения карты: ${giveResult.message}`, 'system');
+        }
+    } else if (!result.survived) { 
+        addLogEntry('Смена не пройдена...', 'system');
     }
   }, [playerId, addLogEntry]);
 
+  // ★ ЛУТИНГ
   const handleLoot = useCallback(async () => {
     if (!playerId || isLooting) return;
     setIsLooting(true);
+    addLogEntry('Обыскиваем локацию...', 'system');
 
     try {
-      const result = await lootLocation(GAME_ID, playerId);
+      // Если это офис (Y), запускаем мини-игру
+      if (player?.currentNode === 'Y') {
+        const hasKeyCard = equipment.specials.includes('key_card');
+        if (!hasKeyCard) {
+             setOfficeMechanic({ active: true });
+             setIsLooting(false);
+             return;
+        }
+      }
 
+      // Обычный лутинг
+      const result = await lootLocation(GAME_ID, playerId);
+      
       if (result.success) {
         if (result.items && result.items.length > 0) {
-          // Показываем найденные предметы
-          const itemNames = result.items.map(id => {
-            const item = getItemById(id);
-            return item ? item.nameRu : id;
-          }).join(', ');
-          addLogEntry(`🎁 Найдено: ${itemNames}`, 'loot');
+           const itemNames = result.items.map(id => ({ id, nameRu: getItemById(id)?.nameRu || id }));
+           setLootRoulette({ active: true, possibleItems: result.items });
+           addLogEntry(`Найдено предметов: ${result.items.length}`, 'loot');
+           if (result.droppedItems && result.droppedItems.length > 0) {
+              addLogEntry(`Не поместилось: ${result.droppedItems.length}`, 'system');
+           }
         } else {
-          addLogEntry(result.message || 'Ничего не найдено', 'loot');
-        }
-
-        if (result.droppedItems && result.droppedItems.length > 0) {
-          addLogEntry(`⚠️ Не поместилось: ${result.droppedItems.length} предметов`, 'loot');
+           addLogEntry(result.message, 'system');
         }
       } else {
-        addLogEntry(result.message || 'Ошибка при обыске', 'system');
+         addLogEntry(result.message, 'system');
       }
-    } catch (error) {
-      console.error('Loot error:', error);
-      addLogEntry('Ошибка при обыске локации', 'system');
+    } catch (e) {
+      console.error(e);
+      addLogEntry('Ошибка при обыске', 'system');
     }
 
     setIsLooting(false);
-  }, [playerId, isLooting, addLogEntry]);
+  }, [playerId, isLooting, addLogEntry, player?.currentNode, equipment]);
 
   const handleLootRouletteComplete = useCallback((items: { id: string; nameRu: string }[]) => {
-    if (items.length > 0) {
-      const itemNames = items.map(i => i.nameRu).join(', ');
-      addLogEntry(`🎁 Получено: ${itemNames}`, 'loot');
-    }
-    setLootRoulette(null);
-  }, [addLogEntry]);
+      setLootRoulette(null);
+  }, []);
 
   const handleWait = useCallback(async () => {
     if (!playerId) return;
@@ -522,6 +643,12 @@ export default function GameBoard() {
 
   return (
     <main className="h-screen bg-black text-white overflow-hidden flex flex-col">
+      
+      {/* АДМИН ПАНЕЛЬ (Только для player1) */}
+      {playerId === 'player_cenoval' && (
+        <AdminTimeControls gameId={GAME_ID} />
+      )}
+
       {/* Система встречи с аниматроником */}
       {encounter?.active && (
         <EncounterSystem
@@ -598,11 +725,11 @@ export default function GameBoard() {
             onAttackPlayer={handleAttackPlayer}
             onInspectPlayer={handleInspectPlayer}
             
-            // ★ ИНТЕГРАЦИЯ ГЛОБАЛЬНОГО ЦИКЛА
+            // ИНТЕГРАЦИЯ ГЛОБАЛЬНОГО ЦИКЛА
             nightCycle={nightCycle}
             calculatedNight={calculatedNight}
             calculatedHour={calculatedHour}
-            enemies={enemies} // Полный список для отображения AI уровней
+            enemies={enemies}
             gameId={GAME_ID}
             isAdmin={playerId === 'player1'}
           />

@@ -24,19 +24,19 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * SERVER ACTIONS:
- *   movePlayer(gameId, playerId, targetNodeId) → MoveResponse
- *   getOrCreatePlayer(gameId, savedPlayerId)   → { success, playerId? }
- *   getTakenPlayerSlots(gameId)                → { takenSlots }
- *   createPlayerInSlot(gameId, slotId, name)   → { success, playerId }
- *   updateStamina(gameId, playerId, change)    → { success, newStamina }
- *   applyDamage(gameId, playerId, damage)      → { success, newHp, isDead }
- *   lootLocation(gameId, playerId)             → { success, items }
- *   checkAllPlayersExhausted(gameId)           → { allExhausted }
- *   startNewTurnForAll(gameId)                 → { success, playerResults }
- *   respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
+ * movePlayer(gameId, playerId, targetNodeId) → MoveResponse
+ * getOrCreatePlayer(gameId, savedPlayerId)   → { success, playerId? }
+ * getTakenPlayerSlots(gameId)                → { takenSlots }
+ * createPlayerInSlot(gameId, slotId, name)   → { success, playerId }
+ * updateStamina(gameId, playerId, change)    → { success, newStamina }
+ * applyDamage(gameId, playerId, damage)      → { success, newHp, isDead }
+ * lootLocation(gameId, playerId)             → { success, items }
+ * checkAllPlayersExhausted(gameId)           → { allExhausted }
+ * startNewTurnForAll(gameId)                 → { success, playerResults }
+ * respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
+ * LAST MODIFIED: 2026-01-01 | VERSION: 2.1.0 (Fix revalidatePath)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -51,12 +51,14 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { PlayerState, GameLogEntry, GlobalNightCycle } from '@/lib/types';
+// ★ ИСПРАВЛЕНИЕ: Добавлен импорт Equipment
+import { PlayerState, GameLogEntry, GlobalNightCycle, Equipment } from '@/lib/types';
 import {
   getAnimatronicAILevel,
   calculateNightAndHour,
   INITIAL_NIGHT_CYCLE
 } from '@/lib/nightCycleConfig';
+
 
 // /END_ANCHOR:GAMEACTIONS/IMPORTS
 
@@ -421,7 +423,9 @@ export async function movePlayer(
       message = `Встречен игрок ${otherPlayersInNode[0].name} в PvP зоне!`;
     }
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout' для полного обновления кэша всех вложенных страниц (включая /game/[id])
+    revalidatePath('/', 'layout');
+    
     return {
       success: true,
       message: message,
@@ -493,7 +497,6 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         defense: 1,      // Защита: 1
         speed: 1,        // Скорость: 1
         luck: 0,         // Удача: 0
-        capacity: 20,    // Вместимость
         maxHp: 100,      // Максимальное ХП
       },
       // ★ FIX: Добавляем экипировку по умолчанию с рюкзаком
@@ -562,7 +565,8 @@ export async function updateStamina(gameId: string, playerId: string, staminaCha
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newStamina };
   } catch (e) {
     console.error(e);
@@ -643,7 +647,8 @@ export async function handleAnimatronicDefeat(
       };
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return result;
   } catch (error) {
     console.error('Animatronic defeat handling error:', error);
@@ -679,7 +684,8 @@ export async function applyDamage(gameId: string, playerId: string, damage: numb
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newHp, isDefeated };
   } catch (e) {
     console.error(e);
@@ -787,7 +793,8 @@ export async function lootLocation(gameId: string, playerId: string) {
         'stats.stamina': currentStamina - 1,
         lastUpdated: FieldValue.serverTimestamp()
       });
-      revalidatePath('/');
+      // ★ FIX: Используем 'layout'
+      revalidatePath('/', 'layout');
       return { success: true, message: 'Ничего не найдено', items: [], newStamina: currentStamina - 1 };
     }
 
@@ -873,7 +880,8 @@ export async function lootLocation(gameId: string, playerId: string) {
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
 
     // Формируем сообщение о результате
     let message = `Найдено: ${foundItems.length}`;
@@ -965,7 +973,8 @@ export async function startNewTurnForAll(gameId: string) {
 
     await Promise.all(updatePromises);
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return {
       success: true,
       message: 'Новый ход начался для всех игроков!',
@@ -1003,7 +1012,8 @@ export async function newTurn(gameId: string, playerId: string) {
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newStamina, diceRoll };
   } catch (e) {
     console.error(e);
@@ -1102,31 +1112,122 @@ function getAnimatronicColor(id: string): string {
 
 // /END_ANCHOR:GAMEACTIONS/RESPAWN
 
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// /START_ANCHOR:GAMEACTIONS/EQUIPMENT
-// Обновление экипировки игрока
-// КОНТРАКТ: Обновляет equipment игрока в Firebase
+// /START_ANCHOR:GAMEACTIONS/GIVE_ITEM
+// Выдача предмета игроку (для квестов, событий и механик)
+// КОНТРАКТ: Приоритет для key_card: specials -> pockets -> containers
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export async function updateEquipment(gameId: string, playerId: string, equipment: any) {
+export async function givePlayerItem(gameId: string, playerId: string, itemId: string) {
   if (!dbAdmin) {
     return { success: false, message: 'Firebase not configured' };
   }
 
   try {
     const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
+    
+    // Используем транзакцию, чтобы избежать гонки данных при обновлении инвентаря
+    const result = await dbAdmin.runTransaction(async (t) => {
+      const playerDoc = await t.get(playerRef);
+      if (!playerDoc.exists) throw new Error('Player not found');
 
-    await playerRef.update({
-      equipment: equipment,
-      lastUpdated: FieldValue.serverTimestamp()
+      const playerData = playerDoc.data();
+      const equipment = (playerData?.equipment || {
+        pockets: [null, null, null, null],
+        specials: [null, null, null],
+        rig: null,
+        bag: null,
+        backpack: null
+      }) as Equipment;
+
+      // Клонируем объект, чтобы не мутировать исходный
+      const newEquipment = JSON.parse(JSON.stringify(equipment));
+
+      // Инициализируем массивы, если они undefined
+      if (!newEquipment.specials) newEquipment.specials = [null, null, null];
+      if (!newEquipment.pockets) newEquipment.pockets = [null, null, null, null];
+
+      let placed = false;
+      let slotName = '';
+
+      // 1. ПРИОРИТЕТ 1: Спец-слоты (только для key_card и ключей)
+      if (itemId === 'key_card' || itemId.includes('key')) {
+        for (let i = 0; i < newEquipment.specials.length; i++) {
+          if (newEquipment.specials[i] === null) {
+            newEquipment.specials[i] = itemId;
+            placed = true;
+            slotName = `Спец-слот ${i + 1}`;
+            break;
+          }
+        }
+      }
+
+      // 2. ПРИОРИТЕТ 2: Карманы
+      if (!placed) {
+        for (let i = 0; i < newEquipment.pockets.length; i++) {
+          if (newEquipment.pockets[i] === null) {
+            newEquipment.pockets[i] = itemId;
+            placed = true;
+            slotName = `Карман ${i + 1}`;
+            break;
+          }
+        }
+      }
+
+      // 3. ПРИОРИТЕТ 3: Разгрузка
+      if (!placed && newEquipment.rig?.items) {
+        for (let i = 0; i < newEquipment.rig.items.length; i++) {
+          if (newEquipment.rig.items[i] === null) {
+            newEquipment.rig.items[i] = itemId;
+            placed = true;
+            slotName = 'Разгрузка';
+            break;
+          }
+        }
+      }
+
+      // 4. ПРИОРИТЕТ 4: Сумка
+      if (!placed && newEquipment.bag?.items) {
+        for (let i = 0; i < newEquipment.bag.items.length; i++) {
+          if (newEquipment.bag.items[i] === null) {
+            newEquipment.bag.items[i] = itemId;
+            placed = true;
+            slotName = 'Сумка';
+            break;
+          }
+        }
+      }
+
+      // 5. ПРИОРИТЕТ 5: Рюкзак
+      if (!placed && newEquipment.backpack?.items) {
+        for (let i = 0; i < newEquipment.backpack.items.length; i++) {
+          if (newEquipment.backpack.items[i] === null) {
+            newEquipment.backpack.items[i] = itemId;
+            placed = true;
+            slotName = 'Рюкзак';
+            break;
+          }
+        }
+      }
+
+      if (placed) {
+        t.update(playerRef, {
+          equipment: newEquipment,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+        return { success: true, message: `Предмет получен: ${itemId} (${slotName})` };
+      } else {
+        return { success: false, message: 'Нет места в инвентаре!' };
+      }
     });
 
-    revalidatePath('/');
-    return { success: true };
+    revalidatePath('/', 'layout');
+    return result;
+
   } catch (e) {
-    console.error('updateEquipment error:', e);
-    return { success: false, message: 'Failed to update equipment' };
+    console.error('Error giving item:', e);
+    return { success: false, message: 'Ошибка выдачи предмета' };
   }
 }
 
-// /END_ANCHOR:GAMEACTIONS/EQUIPMENT
