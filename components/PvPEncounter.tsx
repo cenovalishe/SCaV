@@ -58,7 +58,7 @@ export default function PvPEncounter({
   // Инициировать PvP
   const handleInitiatePvP = useCallback(async () => {
     const result = await initiatePvP(gameId, currentPlayer.id, otherPlayer.id);
-    // [FIX] Используем 'in' для проверки наличия свойства, чтобы TypeScript корректно сузил тип
+    // [FIX] Проверка свойства 'pvpState'
     if (result.success && 'pvpState' in result) {
       setPvpState(result.pvpState);
       setCombatLog(result.pvpState.combatLog);
@@ -82,7 +82,7 @@ export default function PvPEncounter({
     }
   }, [gameId, currentPlayer.id]);
 
-  // Выполнить раунд боя
+// Выполнить раунд боя
   const handleCombatRound = useCallback(async () => {
     if (!pvpState) return;
 
@@ -92,7 +92,7 @@ export default function PvPEncounter({
       pvpState.defenderId
     );
 
-    // [FIX] Используем 'in' для проверки наличия свойства combatLog
+    // [FIX] Проверка свойства 'combatLog'
     if (result.success && 'combatLog' in result) {
       setCombatLog(result.combatLog);
 
@@ -102,12 +102,18 @@ export default function PvPEncounter({
       }
       // Проверка на отступление
       else if ('retreat' in result && result.retreat) {
-        const retreatResult = await handlePvPRetreat(gameId, result.retreatingPlayerId!);
-        if (retreatResult.success) {
-          onComplete({
-            outcome: 'retreat',
-            retreatingPlayerId: result.retreatingPlayerId
-          });
+        // Здесь TypeScript должен понять, что retreatingPlayerId существует, если retreat=true
+        // но для полной безопасности можно добавить проверку
+        const retreatingId = 'retreatingPlayerId' in result ? result.retreatingPlayerId : undefined;
+        
+        if (retreatingId) {
+          const retreatResult = await handlePvPRetreat(gameId, retreatingId);
+          if (retreatResult.success) {
+            onComplete({
+              outcome: 'retreat',
+              retreatingPlayerId: retreatingId
+            });
+          }
         }
       }
     }
@@ -122,7 +128,8 @@ export default function PvPEncounter({
 
     const result = await completePvP(gameId, winnerId, loserId, selectedLootItem || undefined);
 
-    if (result.success) {
+    // [FIX] Проверяем наличие 'lootedItems' перед использованием
+    if (result.success && 'lootedItems' in result) {
       onComplete({
         outcome: pvpState.outcome!,
         lootedItems: result.lootedItems
