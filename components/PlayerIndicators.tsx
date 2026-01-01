@@ -6,10 +6,10 @@
  * PURPOSE: Кликабельные указатели игроков в той же маршрутной точке
  *
  * FEATURES:
- *   - Список игроков на текущей/просматриваемой ноде
- *   - Выпадающее меню с действиями: Атаковать / Осмотреть
- *   - Интеграция с PvP системой
- *   - Открытие модалки осмотра игрока
+ * - Список игроков на текущей/просматриваемой ноде
+ * - Выпадающее меню с действиями: Атаковать / Осмотреть
+ * - Интеграция с PvP системой
+ * - Открытие модалки осмотра игрока
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -100,7 +100,8 @@ export default function PlayerIndicators({
   if (players.length === 0) return null;
 
   return (
-    <div className="absolute bottom-20 left-4 z-20">
+    // [FIX] Переместили позицию с bottom-20 на top-28, чтобы не перекрываться ActionPanel
+    <div className="absolute top-28 left-4 z-30">
       <div className="bg-black/80 border border-green-500/40 rounded-xl overflow-hidden min-w-[180px] backdrop-blur-sm">
         {/* Заголовок */}
         <div className="bg-green-900/60 px-4 py-2 border-b border-green-500/30">
