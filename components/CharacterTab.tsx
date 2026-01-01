@@ -65,7 +65,6 @@ const AVATAR_MAP: Record<string, string> = {
   'Ильяс Вахта': '/avatars/Gemini_Generated_Image_vmf1hgvmf1hgvmf1.jpg',    // player_smailgames
   'Макс Гребень': '/avatars/Gemini_Generated_Image_ffspc2ffspc2ffsp.jpg',   // player_malekith
   'Гоша Грибок': '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg',    // player_cenoval
-};
   // Добавьте остальных персонажей здесь
   // 'ИмяПерсонажа': '/avatars/ИмяФайла.jpg'
 };
