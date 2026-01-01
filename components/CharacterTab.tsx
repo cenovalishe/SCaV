@@ -77,7 +77,8 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
     helmet: null, armor: null, clothes: null,
     pockets: [null, null, null, null],
     specials: [null, null, null],
-    weapon: null, scope: null, tactical: null, suppressor: null,
+    weapon: null,
+    modules: [null, null, null],
     rig: null, bag: null, backpack: null
   };
 

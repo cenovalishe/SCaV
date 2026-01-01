@@ -3,16 +3,17 @@
  * FILE MANIFEST: components/InventoryTab.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Компактная вкладка инвентаря с переменными размерами слотов (REDESIGNED v3.0)
+ * PURPOSE: Компактная вкладка инвентаря с переменными размерами слотов (REDESIGNED v4.0)
  *
  * ┌─────────────────────────────────────────────────────────────────────────────┐
- * │ FEATURES v3.0                                                               │
+ * │ FEATURES v4.0                                                               │
  * ├─────────────────────────────────────────────────────────────────────────────┤
- * │ - Компактная компоновка без прокрутки                                       │
- * │ - Переменные размеры слотов: 1x1, 2x1, 2x2                                 │
- * │ - Popup с информацией о предмете при клике                                 │
- * │ - Действия "использовать" и "выбросить"                                    │
- * │ - Сгруппированные контейнеры                                               │
+ * │ - Исправлен баг обмена предметов (swap)                                     │
+ * │ - Модули вместо scope/tactical/suppressor                                  │
+ * │ - Проверка размера предметов при размещении                                │
+ * │ - Ограничения типов для слотов экипировки                                  │
+ * │ - Единый стиль ячеек 1x1                                                   │
+ * │ - Компактная компоновка без пустого места                                  │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
  * ═══════════════════════════════════════════════════════════════════════════════
@@ -21,7 +22,7 @@
 'use client'
 
 import { useState, useCallback, DragEvent, MouseEvent } from 'react';
-import { Equipment, Container, Item } from '@/lib/types';
+import { Equipment, Container, Item, SLOT_ALLOWED_SUBTYPES, ItemSubType } from '@/lib/types';
 import { getItemById, calculateTotalValue, formatRoubles } from '@/lib/itemData';
 import ItemPopup from './ItemPopup';
 
@@ -44,40 +45,169 @@ interface DragSource {
 interface SlotConfig {
   size: '1x1' | '2x1' | '2x2';
   index: number;
-  subCellsCount?: number; // Количество подъячеек (для 2x2 = 4)
+  subCellsCount?: number;
 }
 
-// Конфигурация слотов рюкзака: два слота 2x2 (с подъячейками), один 2x1 (с подъячейками), три 1x1
-// Слоты 2x2 содержат 4 подъячейки каждый, слот 2x1 содержит 2 подъячейки
+// Конфигурация слотов рюкзака: два слота 2x2, один 2x1, три 1x1
 const BACKPACK_SLOTS: SlotConfig[] = [
-  { size: '2x2', index: 0, subCellsCount: 4 },  // Индексы подъячеек: 0-3
-  { size: '2x2', index: 1, subCellsCount: 4 },  // Индексы подъячеек: 4-7
-  { size: '2x1', index: 2, subCellsCount: 2 },  // Индексы подъячеек: 8-9
-  { size: '1x1', index: 3 },                     // Индекс: 10
-  { size: '1x1', index: 4 },                     // Индекс: 11
-  { size: '1x1', index: 5 },                     // Индекс: 12
+  { size: '2x2', index: 0, subCellsCount: 4 },
+  { size: '2x2', index: 1, subCellsCount: 4 },
+  { size: '2x1', index: 2, subCellsCount: 2 },
+  { size: '1x1', index: 3 },
+  { size: '1x1', index: 4 },
+  { size: '1x1', index: 5 },
 ];
 
-// Конфигурация слотов разгрузки: один слот 2x2 (с подъячейками)
+// Конфигурация слотов разгрузки/сумки: один слот 2x2
 const RIG_SLOTS: SlotConfig[] = [
-  { size: '2x2', index: 0, subCellsCount: 4 },  // 4 подъячейки 1x1
+  { size: '2x2', index: 0, subCellsCount: 4 },
 ];
 
-// Конфигурация слотов сумки: один слот 2x2 (с подъячейками)
 const BAG_SLOTS: SlotConfig[] = [
-  { size: '2x2', index: 0, subCellsCount: 4 },  // 4 подъячейки 1x1
+  { size: '2x2', index: 0, subCellsCount: 4 },
 ];
 
-// Базовый размер единичного слота (увеличен)
-const SLOT_BASE_SIZE = 48; // px
-const SLOT_GAP = 4; // px
+// Базовый размер единичного слота
+const SLOT_BASE_SIZE = 44; // px
+const SLOT_GAP = 2; // px
 
-// Компонент слота 2x2 с подъячейками
-// Позволяет разместить:
-// - 1 предмет 2x2 (занимает все 4 ячейки)
-// - 2 предмета 2x1 (каждый занимает 2 ячейки)
-// - 1 предмет 2x1 + 2 предмета 1x1
-// - 4 предмета 1x1
+// ════════════════════════════════════════════════════════════════════════════════
+// УТИЛИТЫ ДЛЯ ПРОВЕРКИ ОГРАНИЧЕНИЙ
+// ════════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Проверяет, можно ли разместить предмет в указанный слот по типу
+ */
+function canPlaceItemInSlotByType(item: Item, slotType: string): boolean {
+  const allowedSubTypes = SLOT_ALLOWED_SUBTYPES[slotType];
+  if (!allowedSubTypes) return true; // Если ограничений нет - разрешаем
+
+  // Определяем подтип предмета
+  const itemSubType = item.subType || getDefaultSubType(item);
+
+  // 'any' означает что предмет можно класть куда угодно
+  if (itemSubType === 'any') return true;
+
+  // Проверяем совпадение подтипа или разрешение 'any' в слоте
+  return allowedSubTypes.includes(itemSubType) || allowedSubTypes.includes('any');
+}
+
+/**
+ * Получает подтип по умолчанию на основе типа предмета
+ */
+function getDefaultSubType(item: Item): ItemSubType {
+  switch (item.type) {
+    case 'consumable': return 'consumable';
+    case 'valuable': return 'valuable';
+    case 'key': return 'key';
+    case 'weapon': return 'weapon';
+    case 'equipment': return 'any';
+    case 'attachment': return 'module';
+    default: return 'any';
+  }
+}
+
+/**
+ * Проверяет, помещается ли предмет в слот по размеру
+ */
+function canPlaceItemInSlotBySize(
+  item: Item,
+  slotType: '2x2' | '2x1' | '1x1',
+  localIndex: number
+): boolean {
+  const itemWidth = item.width || 1;
+  const itemHeight = item.height || 1;
+
+  if (slotType === '1x1') {
+    return itemWidth === 1 && itemHeight === 1;
+  }
+
+  if (slotType === '2x1') {
+    // Горизонтальный слот - 2 ячейки в ряд
+    const startX = localIndex % 2;
+    // Предмет должен помещаться по ширине
+    if (startX + itemWidth > 2) return false;
+    // И по высоте (только 1 ряд)
+    if (itemHeight > 1) return false;
+    return true;
+  }
+
+  if (slotType === '2x2') {
+    // Сетка 2x2
+    const startX = localIndex % 2;
+    const startY = Math.floor(localIndex / 2);
+    // Предмет должен помещаться в границы
+    if (startX + itemWidth > 2) return false;
+    if (startY + itemHeight > 2) return false;
+    return true;
+  }
+
+  return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// КОМПОНЕНТЫ СЛОТОВ
+// ════════════════════════════════════════════════════════════════════════════════
+
+// Единый стиль подъячейки (используется во всех слотах)
+function SubCell({
+  itemId,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onClick,
+  isDragOver,
+  isInvalid = false,
+  size = 'normal',
+  color = 'zinc'
+}: {
+  itemId: string | null;
+  onDragStart?: (e: DragEvent) => void;
+  onDragOver?: (e: DragEvent) => void;
+  onDrop?: (e: DragEvent) => void;
+  onClick?: (e: MouseEvent) => void;
+  isDragOver?: boolean;
+  isInvalid?: boolean;
+  size?: 'small' | 'normal';
+  color?: 'zinc' | 'red' | 'blue' | 'orange';
+}) {
+  const item = itemId ? getItemById(itemId) : null;
+  const dim = size === 'small' ? SLOT_BASE_SIZE - 6 : SLOT_BASE_SIZE - 4;
+
+  const colorSchemes = {
+    zinc: 'border-white/10 bg-black/30',
+    red: 'border-red-500/20 bg-red-900/20',
+    blue: 'border-blue-500/20 bg-blue-900/20',
+    orange: 'border-orange-500/20 bg-orange-900/20',
+  };
+
+  return (
+    <div
+      draggable={!!item}
+      onDragStart={onDragStart}
+      onDragOver={(e) => { e.preventDefault(); onDragOver?.(e); }}
+      onDrop={onDrop}
+      onClick={onClick}
+      className={`
+        flex items-center justify-center rounded cursor-pointer
+        border transition-all
+        ${colorSchemes[color]}
+        ${isDragOver && !isInvalid ? 'border-green-400 bg-green-900/30 scale-105' : ''}
+        ${isDragOver && isInvalid ? 'border-red-500 bg-red-900/30' : ''}
+        ${item ? 'hover:scale-[1.02] hover:border-white/20' : 'hover:border-white/15'}
+      `}
+      style={{ width: dim, height: dim }}
+      title={item ? item.nameRu : '1x1'}
+    >
+      {item ? (
+        <span className="text-lg drop-shadow-md">{item.icon}</span>
+      ) : (
+        <div className="text-white/10 text-[7px] font-mono">1x1</div>
+      )}
+    </div>
+  );
+}
+
 // Компонент слота 2x2 с подъячейками
 function SubCellSlot2x2({
   items,
@@ -87,9 +217,10 @@ function SubCellSlot2x2({
   onDrop,
   onClick,
   dragOverTarget,
-  baseIndex
+  baseIndex,
+  invalidDropTarget
 }: {
-  items: (string | null)[]; // 4 подъячейки
+  items: (string | null)[];
   color?: 'zinc' | 'red' | 'blue' | 'orange';
   onDragStart?: (e: DragEvent, itemId: string, subCellIndex: number) => void;
   onDragOver?: (e: DragEvent, subCellIndex: number) => void;
@@ -97,12 +228,13 @@ function SubCellSlot2x2({
   onClick?: (e: MouseEvent, itemId: string, subCellIndex: number) => void;
   dragOverTarget?: number | null;
   baseIndex: number;
+  invalidDropTarget?: boolean;
 }) {
   const colorSchemes = {
-    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15', highlight: 'border-white/30' },
-    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30', highlight: 'border-red-400/50' },
-    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30', highlight: 'border-blue-400/50' },
-    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30', highlight: 'border-orange-400/50' },
+    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15' },
+    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30' },
+    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30' },
+    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30' },
   };
   const scheme = colorSchemes[color];
 
@@ -118,13 +250,11 @@ function SubCellSlot2x2({
     }
 
     if (processedItems.has(itemId)) {
-      // Этот предмет уже обработан - это вторичная ячейка
       cellContents[i] = { itemId, isMain: false, size: 1 };
       continue;
     }
 
     const item = getItemById(itemId);
-    // FIX: Используем (item?.size || 1) для безопасности
     const itemSize = item?.size || 1;
     processedItems.add(itemId);
     cellContents[i] = { itemId, isMain: true, size: itemSize };
@@ -144,8 +274,7 @@ function SubCellSlot2x2({
           return <div key={i} className="w-full h-full" />;
         }
 
-        // FIX: Безопасная проверка размера (item.size || 0)
-        // Для предметов 2x2 - рендерим на все 4 ячейки (только в первой ячейке)
+        // Для предметов 2x2
         if (item && (item.size || 0) >= 4 && i === 0) {
           return (
             <div
@@ -159,101 +288,86 @@ function SubCellSlot2x2({
                 col-span-2 row-span-2 flex items-center justify-center
                 bg-black/30 border border-white/10 rounded cursor-pointer
                 hover:scale-[1.02] hover:border-white/30 transition-all
-                ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && !invalidDropTarget ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && invalidDropTarget ? 'border-red-500 bg-red-900/30' : ''}
               `}
               style={{ width: '100%', height: '100%' }}
-              title={item ? `${item.nameRu} (${item.size || 4} ячеек)` : undefined}
+              title={item ? `${item.nameRu} (2x2)` : undefined}
             >
               <span className="text-3xl drop-shadow-md">{item.icon}</span>
             </div>
           );
         }
 
-        // FIX: Безопасная проверка размера для предметов 2x1 (горизонтальные) и 1x2 (вертикальные)
-        if (item && (item.size || 0) === 2) {
-          const isHorizontal = (item.width || 1) === 2 && (item.height || 1) === 1;
-          const isVertical = (item.width || 1) === 1 && (item.height || 1) === 2;
+        // Для горизонтальных предметов 2x1
+        if (item && (item.size || 0) === 2 && (item.width || 1) === 2 && (i === 0 || i === 2)) {
+          return (
+            <div
+              key={i}
+              draggable={!!item}
+              onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+              onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+              onDrop={(e) => onDrop?.(e, i)}
+              onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+              className={`
+                col-span-2 flex items-center justify-center
+                bg-black/30 border border-white/10 rounded cursor-pointer
+                hover:scale-[1.02] hover:border-white/20 transition-all
+                ${isDragOver && !invalidDropTarget ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && invalidDropTarget ? 'border-red-500 bg-red-900/30' : ''}
+              `}
+              title={item ? `${item.nameRu} (2x1)` : undefined}
+            >
+              <span className="text-2xl drop-shadow-md">{item.icon}</span>
+            </div>
+          );
+        }
 
-          // Горизонтальный предмет (2x1) - рендерим если в левой ячейке ряда (0 или 2)
-          if (isHorizontal && (i === 0 || i === 2)) {
-            return (
-              <div
-                key={i}
-                draggable={!!item}
-                onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
-                onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
-                onDrop={(e) => onDrop?.(e, i)}
-                onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
-                className={`
-                  col-span-2 flex items-center justify-center
-                  bg-black/30 border border-white/10 rounded cursor-pointer
-                  hover:scale-[1.02] hover:border-white/20 transition-all
-                  ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
-                `}
-                title={item ? `${item.nameRu} (2x1)` : undefined}
-              >
-                <span className="text-2xl drop-shadow-md">{item.icon}</span>
-              </div>
-            );
-          }
-
-          // Вертикальный предмет (1x2) - рендерим если в верхней ячейке колонки (0 или 1)
-          if (isVertical && (i === 0 || i === 1)) {
-            return (
-              <div
-                key={i}
-                draggable={!!item}
-                onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
-                onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
-                onDrop={(e) => onDrop?.(e, i)}
-                onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
-                className={`
-                  row-span-2 flex items-center justify-center
-                  bg-black/30 border border-white/10 rounded cursor-pointer
-                  hover:scale-[1.02] hover:border-white/20 transition-all
-                  ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
-                `}
-                style={{ gridColumn: i === 0 ? 1 : 2, gridRow: '1 / 3' }}
-                title={item ? `${item.nameRu} (1x2)` : undefined}
-              >
-                <span className="text-2xl drop-shadow-md">{item.icon}</span>
-              </div>
-            );
-          }
+        // Для вертикальных предметов 1x2
+        if (item && (item.size || 0) === 2 && (item.width || 1) === 1 && (i === 0 || i === 1)) {
+          return (
+            <div
+              key={i}
+              draggable={!!item}
+              onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
+              onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+              onDrop={(e) => onDrop?.(e, i)}
+              onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
+              className={`
+                row-span-2 flex items-center justify-center
+                bg-black/30 border border-white/10 rounded cursor-pointer
+                hover:scale-[1.02] hover:border-white/20 transition-all
+                ${isDragOver && !invalidDropTarget ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && invalidDropTarget ? 'border-red-500 bg-red-900/30' : ''}
+              `}
+              style={{ gridColumn: i === 0 ? 1 : 2, gridRow: '1 / 3' }}
+              title={item ? `${item.nameRu} (1x2)` : undefined}
+            >
+              <span className="text-2xl drop-shadow-md">{item.icon}</span>
+            </div>
+          );
         }
 
         // Стандартная ячейка 1x1
         return (
-          <div
+          <SubCell
             key={i}
-            draggable={!!item}
+            itemId={cell.itemId}
+            color={color}
             onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
-            onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+            onDragOver={(e) => onDragOver?.(e, i)}
             onDrop={(e) => onDrop?.(e, i)}
             onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
-            className={`
-              flex items-center justify-center
-              bg-black/30 border border-white/10 rounded cursor-pointer
-              hover:border-white/20 transition-all
-              ${isDragOver ? 'border-green-400 bg-green-900/30 scale-105' : ''}
-              ${item ? 'hover:scale-[1.02]' : ''}
-            `}
-            style={{ width: SLOT_BASE_SIZE - 4, height: SLOT_BASE_SIZE - 4 }}
-            title={item ? `${item.nameRu}` : '1x1'}
-          >
-            {item ? (
-              <span className="text-xl drop-shadow-md">{item.icon}</span>
-            ) : (
-              <div className="text-white/10 text-[8px] font-mono">1x1</div>
-            )}
-          </div>
+            isDragOver={isDragOver}
+            isInvalid={invalidDropTarget}
+          />
         );
       })}
     </div>
   );
 }
 
-// Компонент слота 2x1 с двумя подъячейками 1x1 (горизонтальный)
+// Компонент слота 2x1 с двумя подъячейками
 function SubCellSlot2x1({
   items,
   color = 'zinc',
@@ -262,9 +376,10 @@ function SubCellSlot2x1({
   onDrop,
   onClick,
   dragOverTarget,
-  baseIndex
+  baseIndex,
+  invalidDropTarget
 }: {
-  items: (string | null)[]; // 2 подъячейки
+  items: (string | null)[];
   color?: 'zinc' | 'red' | 'blue' | 'orange';
   onDragStart?: (e: DragEvent, itemId: string, subCellIndex: number) => void;
   onDragOver?: (e: DragEvent, subCellIndex: number) => void;
@@ -272,16 +387,17 @@ function SubCellSlot2x1({
   onClick?: (e: MouseEvent, itemId: string, subCellIndex: number) => void;
   dragOverTarget?: number | null;
   baseIndex: number;
+  invalidDropTarget?: boolean;
 }) {
   const colorSchemes = {
-    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15', highlight: 'border-white/30' },
-    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30', highlight: 'border-red-400/50' },
-    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30', highlight: 'border-blue-400/50' },
-    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30', highlight: 'border-orange-400/50' },
+    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15' },
+    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30' },
+    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30' },
+    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30' },
   };
   const scheme = colorSchemes[color];
 
-  // Анализируем какие предметы занимают какие ячейки
+  // Анализируем ячейки
   const cellContents: { itemId: string | null; isMain: boolean; size: number }[] = [];
   const processedItems = new Set<string>();
 
@@ -312,12 +428,11 @@ function SubCellSlot2x1({
         const item = cell.itemId ? getItemById(cell.itemId) : null;
         const isDragOver = dragOverTarget === baseIndex + i;
 
-        // Пропускаем рендер вторичных ячеек больших предметов
         if (!cell.isMain && cell.itemId) {
           return <div key={i} className="w-full h-full" />;
         }
 
-        // Горизонтальный предмет (2x1) - занимает обе ячейки
+        // Горизонтальный предмет 2x1
         if (item && (item.size || 0) === 2 && (item.width || 1) === 2 && i === 0) {
           return (
             <div
@@ -331,7 +446,8 @@ function SubCellSlot2x1({
                 flex-1 flex items-center justify-center
                 bg-black/30 border border-white/10 rounded cursor-pointer
                 hover:scale-[1.02] hover:border-white/20 transition-all
-                ${isDragOver ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && !invalidDropTarget ? 'border-green-400 bg-green-900/30' : ''}
+                ${isDragOver && invalidDropTarget ? 'border-red-500 bg-red-900/30' : ''}
               `}
               style={{ width: SLOT_BASE_SIZE * 2 - 4, height: SLOT_BASE_SIZE - 4 }}
               title={item ? `${item.nameRu} (2x1)` : undefined}
@@ -343,125 +459,24 @@ function SubCellSlot2x1({
 
         // Стандартная ячейка 1x1
         return (
-          <div
+          <SubCell
             key={i}
-            draggable={!!item}
+            itemId={cell.itemId}
+            color={color}
             onDragStart={(e) => cell.itemId && onDragStart?.(e, cell.itemId, i)}
-            onDragOver={(e) => { e.preventDefault(); onDragOver?.(e, i); }}
+            onDragOver={(e) => onDragOver?.(e, i)}
             onDrop={(e) => onDrop?.(e, i)}
             onClick={(e) => cell.itemId && onClick?.(e, cell.itemId, i)}
-            className={`
-              flex items-center justify-center
-              bg-black/30 border border-white/10 rounded cursor-pointer
-              hover:border-white/20 transition-all
-              ${isDragOver ? 'border-green-400 bg-green-900/30 scale-105' : ''}
-              ${item ? 'hover:scale-[1.02]' : ''}
-            `}
-            style={{ width: SLOT_BASE_SIZE - 4, height: SLOT_BASE_SIZE - 4 }}
-            title={item ? `${item.nameRu}` : '1x1'}
-          >
-            {item ? (
-              <span className="text-xl drop-shadow-md">{item.icon}</span>
-            ) : (
-              <div className="text-white/10 text-[8px] font-mono">1x1</div>
-            )}
-          </div>
+            isDragOver={isDragOver}
+            isInvalid={invalidDropTarget}
+          />
         );
       })}
     </div>
   );
 }
 
-// Компонент слота с переменным размером
-function VariableSlot({
-  size,
-  itemId,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onClick,
-  isDragOver,
-  color = 'zinc'
-}: {
-  size: '1x1' | '2x1' | '2x2';
-  itemId: string | null;
-  onDragStart?: (e: DragEvent) => void;
-  onDragOver?: (e: DragEvent) => void;
-  onDrop?: (e: DragEvent) => void;
-  onClick?: (e: MouseEvent) => void;
-  isDragOver?: boolean;
-  color?: 'zinc' | 'red' | 'blue' | 'orange';
-}) {
-  const item = itemId ? getItemById(itemId) : null;
-
-  // Размеры в зависимости от типа
-  const dimensions = {
-    '1x1': { w: SLOT_BASE_SIZE, h: SLOT_BASE_SIZE, icon: 'text-xl' },
-    '2x1': { w: SLOT_BASE_SIZE * 2 + SLOT_GAP, h: SLOT_BASE_SIZE, icon: 'text-2xl' },
-    '2x2': { w: SLOT_BASE_SIZE * 2 + SLOT_GAP, h: SLOT_BASE_SIZE * 2 + SLOT_GAP, icon: 'text-3xl' },
-  };
-
-  const colorSchemes = {
-    zinc: {
-      bg: 'from-zinc-800 to-zinc-900',
-      border: isDragOver ? 'border-green-400' : 'border-white/15',
-      hover: 'hover:border-white/30',
-    },
-    red: {
-      bg: 'from-red-900/40 to-red-950/40',
-      border: isDragOver ? 'border-green-400' : 'border-red-500/30',
-      hover: 'hover:border-red-400/50',
-    },
-    blue: {
-      bg: 'from-blue-900/40 to-blue-950/40',
-      border: isDragOver ? 'border-green-400' : 'border-blue-500/30',
-      hover: 'hover:border-blue-400/50',
-    },
-    orange: {
-      bg: 'from-orange-900/40 to-orange-950/40',
-      border: isDragOver ? 'border-green-400' : 'border-orange-500/30',
-      hover: 'hover:border-orange-400/50',
-    },
-  };
-
-  const scheme = colorSchemes[color];
-  const dim = dimensions[size];
-
-  return (
-    <div
-      draggable={!!item}
-      onDragStart={onDragStart}
-      onDragOver={onDragOver}
-      onDrop={onDrop}
-      onClick={onClick}
-      className={`
-        relative bg-gradient-to-br ${scheme.bg}
-        border ${scheme.border} ${scheme.hover}
-        rounded transition-all cursor-pointer
-        flex items-center justify-center
-        ${isDragOver ? 'scale-105 bg-green-900/30' : ''}
-        ${item ? 'hover:scale-[1.02] shadow-lg' : ''}
-      `}
-      style={{ width: dim.w, height: dim.h }}
-      title={item ? `${item.nameRu} - ${formatRoubles(item.value)}` : undefined}
-    >
-      {item ? (
-        <span className={`${dim.icon} drop-shadow-md`}>{item.icon}</span>
-      ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className={`text-white/10 text-[8px] font-mono`}>{size}</div>
-        </div>
-      )}
-
-      {/* Индикатор размера для больших слотов */}
-      {size !== '1x1' && !item && (
-        <div className="absolute inset-0 border border-dashed border-white/5 rounded pointer-events-none" />
-      )}
-    </div>
-  );
-}
-
-// Компактный слот экипировки
+// Компактный слот экипировки (единый стиль с подъячейками)
 function CompactEquipmentSlot({
   label,
   slotType,
@@ -471,7 +486,8 @@ function CompactEquipmentSlot({
   onDragOver,
   onDrop,
   onClick,
-  isDragOver
+  isDragOver,
+  isInvalidDrop = false
 }: {
   label: string;
   slotType: string;
@@ -482,15 +498,10 @@ function CompactEquipmentSlot({
   onDrop?: (e: DragEvent) => void;
   onClick?: (e: MouseEvent) => void;
   isDragOver?: boolean;
+  isInvalidDrop?: boolean;
 }) {
   const item = itemId ? getItemById(itemId) : null;
-
-  const sizes = {
-    small: { dim: 'w-11 h-11', icon: 'text-xl', label: 'text-[8px]' },
-    normal: { dim: 'w-14 h-14', icon: 'text-2xl', label: 'text-[9px]' },
-  };
-
-  const s = sizes[size];
+  const dim = size === 'small' ? SLOT_BASE_SIZE - 4 : SLOT_BASE_SIZE;
 
   return (
     <div
@@ -500,26 +511,29 @@ function CompactEquipmentSlot({
       onDrop={onDrop}
       onClick={onClick}
       className={`
-        ${s.dim}
-        border ${isDragOver ? 'border-green-400 bg-green-900/30' : 'border-white/15'}
-        bg-gradient-to-br from-zinc-800 to-zinc-900
-        flex items-center justify-center
-        hover:border-white/30 hover:bg-zinc-700/50
-        transition-all cursor-pointer rounded
-        ${item ? 'hover:scale-105 shadow-md' : ''}
+        border bg-black/30 rounded cursor-pointer
+        flex items-center justify-center transition-all
+        ${isDragOver && !isInvalidDrop ? 'border-green-400 bg-green-900/30 scale-105' : 'border-white/10'}
+        ${isDragOver && isInvalidDrop ? 'border-red-500 bg-red-900/30' : ''}
+        ${item ? 'hover:scale-[1.02] hover:border-white/20' : 'hover:border-white/15'}
       `}
+      style={{ width: dim, height: dim }}
       title={item ? `${item.nameRu}` : label}
     >
       {item ? (
-        <span className={`${s.icon} drop-shadow-md`}>{item.icon}</span>
+        <span className={`${size === 'small' ? 'text-lg' : 'text-xl'} drop-shadow-md`}>{item.icon}</span>
       ) : (
-        <span className={`text-white/20 ${s.label} font-mono text-center leading-tight`}>
+        <span className="text-white/20 text-[8px] font-mono text-center leading-tight">
           {label}
         </span>
       )}
     </div>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════════
+// ОСНОВНОЙ КОМПОНЕНТ
+// ════════════════════════════════════════════════════════════════════════════════
 
 export default function InventoryTab({
   equipment,
@@ -531,6 +545,7 @@ export default function InventoryTab({
   const [dragSource, setDragSource] = useState<DragSource | null>(null);
   const [dragOverTarget, setDragOverTarget] = useState<{ type: string; index?: number } | null>(null);
   const [selectedItem, setSelectedItem] = useState<{ item: Item; position: { x: number; y: number }; source: { type: string; index?: number } } | null>(null);
+  const [invalidDropTarget, setInvalidDropTarget] = useState(false);
 
   // Расчет ценности
   const allItems: (string | null)[] = [
@@ -541,7 +556,72 @@ export default function InventoryTab({
   ];
   const totalValue = calculateTotalValue(allItems);
 
-  // Drag handlers
+  // ════════════════════════════════════════════════════════════════════════════
+  // УТИЛИТЫ ДЛЯ РАБОТЫ С КОНТЕЙНЕРАМИ
+  // ════════════════════════════════════════════════════════════════════════════
+
+  const getBackpackSlotInfo = (index: number): { type: '2x2' | '2x1' | '1x1'; baseIndex: number; localIndex: number } => {
+    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
+    if (index < 8) return { type: '2x2', baseIndex: 4, localIndex: index - 4 };
+    if (index < 10) return { type: '2x1', baseIndex: 8, localIndex: index - 8 };
+    return { type: '1x1', baseIndex: index, localIndex: 0 };
+  };
+
+  const getContainerSlotInfo = (index: number): { type: '2x2' | '1x1'; baseIndex: number; localIndex: number } => {
+    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
+    return { type: '1x1', baseIndex: index, localIndex: 0 };
+  };
+
+  // Получает индексы занимаемые предметом
+  const getOccupiedIndices = (
+    localIndex: number,
+    item: Item | undefined,
+    slotType: '2x2' | '2x1' | '1x1',
+    baseIndex: number
+  ): number[] => {
+    if (!item) return [baseIndex + localIndex];
+
+    const itemWidth = item.width || 1;
+    const itemHeight = item.height || 1;
+
+    if (slotType === '1x1') return [baseIndex];
+
+    if (slotType === '2x1') {
+      if (itemWidth === 2 && itemHeight === 1) {
+        return [baseIndex, baseIndex + 1];
+      }
+      return [baseIndex + localIndex];
+    }
+
+    if (slotType === '2x2') {
+      const indices: number[] = [];
+      const startX = localIndex % 2;
+      const startY = Math.floor(localIndex / 2);
+
+      for (let y = 0; y < itemHeight; y++) {
+        for (let x = 0; x < itemWidth; x++) {
+          const cellX = startX + x;
+          const cellY = startY + y;
+          if (cellX < 2 && cellY < 2) {
+            indices.push(baseIndex + cellY * 2 + cellX);
+          }
+        }
+      }
+      return indices.length > 0 ? indices : [baseIndex + localIndex];
+    }
+
+    return [baseIndex + localIndex];
+  };
+
+  // Очищает все ячейки занятые предметом
+  const clearItemFromContainer = (container: Container, itemId: string) => {
+    container.items = container.items.map(item => item === itemId ? null : item);
+  };
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // DRAG & DROP HANDLERS
+  // ════════════════════════════════════════════════════════════════════════════
+
   const handleDragStart = useCallback((e: DragEvent, itemId: string, source: string, index?: number) => {
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', itemId);
@@ -559,85 +639,45 @@ export default function InventoryTab({
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
     setDragOverTarget({ type: target, index });
-  }, []);
+
+    // Проверка валидности размещения
+    if (dragSource) {
+      const draggedItem = getItemById(dragSource.itemId);
+      if (draggedItem) {
+        let isValid = true;
+
+        // Проверка ограничений типа для слотов экипировки
+        if (!['rig', 'bag', 'backpack'].includes(target) && !target.startsWith('pocket')) {
+          isValid = canPlaceItemInSlotByType(draggedItem, target);
+        }
+
+        // Проверка размера для контейнеров
+        if (['rig', 'bag', 'backpack'].includes(target) && index !== undefined) {
+          const slotInfo = target === 'backpack'
+            ? getBackpackSlotInfo(index)
+            : getContainerSlotInfo(index);
+          isValid = isValid && canPlaceItemInSlotBySize(draggedItem, slotInfo.type, slotInfo.localIndex);
+        }
+
+        // Проверка размера для слотов экипировки (только 1x1)
+        if (!['rig', 'bag', 'backpack'].includes(target) && !target.startsWith('pocket')) {
+          const itemWidth = draggedItem.width || 1;
+          const itemHeight = draggedItem.height || 1;
+          if (itemWidth > 1 || itemHeight > 1) {
+            isValid = false;
+          }
+        }
+
+        setInvalidDropTarget(!isValid);
+      }
+    }
+  }, [dragSource]);
 
   const handleDragEnd = useCallback(() => {
     setDragSource(null);
     setDragOverTarget(null);
+    setInvalidDropTarget(false);
   }, []);
-
-  // ════════════════════════════════════════════════════════════════════════
-  // FIX v3: Корректная обработка размеров слотов (2x2, 2x1, 1x1)
-  // Слоты рюкзака: 0-3 (2x2), 4-7 (2x2), 8-9 (2x1), 10-12 (1x1)
-  // Слоты разгрузки/сумки: 0-3 (2x2)
-  // ════════════════════════════════════════════════════════════════════════
-
-  // Определяем тип слота и его границы по индексу для рюкзака
-  const getBackpackSlotInfo = (index: number): { type: '2x2' | '2x1' | '1x1'; baseIndex: number; localIndex: number } => {
-    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
-    if (index < 8) return { type: '2x2', baseIndex: 4, localIndex: index - 4 };
-    if (index < 10) return { type: '2x1', baseIndex: 8, localIndex: index - 8 };
-    return { type: '1x1', baseIndex: index, localIndex: 0 };
-  };
-
-  // Определяем тип слота для разгрузки/сумки (только 2x2)
-  const getContainerSlotInfo = (index: number): { type: '2x2' | '1x1'; baseIndex: number; localIndex: number } => {
-    if (index < 4) return { type: '2x2', baseIndex: 0, localIndex: index };
-    return { type: '1x1', baseIndex: index, localIndex: 0 };
-  };
-
-  // Вспомогательная функция для получения индексов, занимаемых предметом
-  const getOccupiedIndices = (
-    localIndex: number,
-    item: Item | undefined,
-    slotType: '2x2' | '2x1' | '1x1',
-    baseIndex: number
-  ): number[] => {
-    if (!item) return [baseIndex + localIndex];
-
-    const itemWidth = item.width || 1;
-    const itemHeight = item.height || 1;
-    const itemSize = item.size || 1;
-
-    // Для 1x1 слотов - только один индекс
-    if (slotType === '1x1') {
-      return [baseIndex];
-    }
-
-    // Для 2x1 слотов - горизонтальный ряд
-    if (slotType === '2x1') {
-      // 2x1 предмет занимает обе ячейки
-      if (itemWidth === 2 && itemHeight === 1) {
-        return [baseIndex, baseIndex + 1];
-      }
-      // 1x1 предмет - одна ячейка
-      return [baseIndex + localIndex];
-    }
-
-    // Для 2x2 слотов - сетка 2x2
-    // Сетка: [0, 1]
-    //        [2, 3]
-    const indices: number[] = [];
-    const startX = localIndex % 2;
-    const startY = Math.floor(localIndex / 2);
-
-    for (let y = 0; y < itemHeight; y++) {
-      for (let x = 0; x < itemWidth; x++) {
-        const cellX = startX + x;
-        const cellY = startY + y;
-        if (cellX < 2 && cellY < 2) {
-          indices.push(baseIndex + cellY * 2 + cellX);
-        }
-      }
-    }
-
-    return indices.length > 0 ? indices : [baseIndex + localIndex];
-  };
-
-  // Очищает все ячейки, занятые предметом в контейнере
-  const clearItemFromContainer = (container: Container, itemId: string) => {
-    container.items = container.items.map(item => item === itemId ? null : item);
-  };
 
   const handleDrop = useCallback((e: DragEvent, target: string, index?: number) => {
     e.preventDefault();
@@ -646,59 +686,163 @@ export default function InventoryTab({
       return;
     }
 
-    const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
     const draggedItem = getItemById(dragSource.itemId);
+    if (!draggedItem) {
+      handleDragEnd();
+      return;
+    }
 
-    // --- 0. ПОЛУЧАЕМ ПРЕДМЕТ В ЦЕЛЕВОЙ ЯЧЕЙКЕ (для обмена) ---
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ВАЛИДАЦИЯ
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    // Проверка типа для слотов экипировки
+    if (!['rig', 'bag', 'backpack'].includes(target) && !target.startsWith('pocket')) {
+      if (!canPlaceItemInSlotByType(draggedItem, target)) {
+        handleDragEnd();
+        return;
+      }
+
+      // Проверка размера (экипировка только 1x1)
+      const itemWidth = draggedItem.width || 1;
+      const itemHeight = draggedItem.height || 1;
+      if (itemWidth > 1 || itemHeight > 1) {
+        handleDragEnd();
+        return;
+      }
+    }
+
+    // Проверка размера для контейнеров
+    if (['rig', 'bag', 'backpack'].includes(target) && index !== undefined) {
+      const slotInfo = target === 'backpack'
+        ? getBackpackSlotInfo(index)
+        : getContainerSlotInfo(index);
+
+      if (!canPlaceItemInSlotBySize(draggedItem, slotInfo.type, slotInfo.localIndex)) {
+        handleDragEnd();
+        return;
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // ИСПРАВЛЕННАЯ ЛОГИКА ОБМЕНА (SWAP)
+    // ═══════════════════════════════════════════════════════════════════════════
+
+    const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
+
+    // 0. ПОЛУЧАЕМ ПРЕДМЕТ В ЦЕЛЕВОЙ ЯЧЕЙКЕ
     let targetItemId: string | null = null;
+    let targetOccupiedIndices: number[] = [];
 
     if (['rig', 'bag', 'backpack'].includes(target)) {
       const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
       if (container && index !== undefined) {
         targetItemId = container.items[index] || null;
+        if (targetItemId) {
+          const targetItem = getItemById(targetItemId);
+          const slotInfo = target === 'backpack'
+            ? getBackpackSlotInfo(index)
+            : getContainerSlotInfo(index);
+          targetOccupiedIndices = getOccupiedIndices(slotInfo.localIndex, targetItem, slotInfo.type, slotInfo.baseIndex);
+        }
       }
     } else if (target.startsWith('pocket')) {
       const pocketIndex = parseInt(target.replace('pocket', ''));
-      targetItemId = newEquipment.pockets[pocketIndex] || null;
+      targetItemId = newEquipment.pockets?.[pocketIndex] || null;
     } else if (target.startsWith('special')) {
       const idx = parseInt(target.replace('special', ''));
       targetItemId = newEquipment.specials?.[idx] || null;
+    } else if (target.startsWith('module')) {
+      const idx = parseInt(target.replace('module', ''));
+      targetItemId = newEquipment.modules?.[idx] || null;
     } else {
       targetItemId = (newEquipment as any)[target] || null;
     }
 
-    // --- 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА ---
+    // 1. УДАЛЕНИЕ ИЗ ИСТОЧНИКА
     if (dragSource.type === 'container' && dragSource.containerType) {
       const container = newEquipment[dragSource.containerType];
       if (container) {
-        // Очищаем все ячейки, занятые этим предметом
+        // Очищаем ВСЕ ячейки занятые перетаскиваемым предметом
         clearItemFromContainer(container, dragSource.itemId);
-        // Если есть предмет для обмена, размещаем его в первую свободную ячейку источника
-        if (targetItemId && dragSource.index !== undefined) {
-          container.items[dragSource.index] = targetItemId;
-        }
       }
     } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
-      newEquipment.pockets[dragSource.index] = targetItemId; // Обмен
+      newEquipment.pockets[dragSource.index] = null;
     } else if (dragSource.type === 'equipment' && dragSource.slot) {
       if (dragSource.slot.startsWith('special')) {
         const idx = parseInt(dragSource.slot.replace('special', ''));
-        if (newEquipment.specials) newEquipment.specials[idx] = targetItemId;
+        if (newEquipment.specials) newEquipment.specials[idx] = null;
+      } else if (dragSource.slot.startsWith('module')) {
+        const idx = parseInt(dragSource.slot.replace('module', ''));
+        if (newEquipment.modules) newEquipment.modules[idx] = null;
       } else {
-        (newEquipment as any)[dragSource.slot] = targetItemId;
+        (newEquipment as any)[dragSource.slot] = null;
       }
     }
 
-    // --- 2. ДОБАВЛЕНИЕ В ЦЕЛЬ ---
+    // 2. РАЗМЕЩЕНИЕ ЦЕЛЕВОГО ПРЕДМЕТА В ИСТОЧНИК (SWAP)
+    if (targetItemId && targetItemId !== dragSource.itemId) {
+      const targetItem = getItemById(targetItemId);
+
+      if (dragSource.type === 'container' && dragSource.containerType && dragSource.index !== undefined) {
+        const sourceContainer = newEquipment[dragSource.containerType];
+        if (sourceContainer && targetItem) {
+          // Проверяем что целевой предмет влезает в источник
+          const sourceSlotInfo = dragSource.containerType === 'backpack'
+            ? getBackpackSlotInfo(dragSource.index)
+            : getContainerSlotInfo(dragSource.index);
+
+          if (canPlaceItemInSlotBySize(targetItem, sourceSlotInfo.type, sourceSlotInfo.localIndex)) {
+            const sourceOccupiedIndices = getOccupiedIndices(
+              sourceSlotInfo.localIndex,
+              targetItem,
+              sourceSlotInfo.type,
+              sourceSlotInfo.baseIndex
+            );
+            // Размещаем целевой предмет в источник
+            for (const idx of sourceOccupiedIndices) {
+              if (idx < sourceContainer.items.length) {
+                sourceContainer.items[idx] = targetItemId;
+              }
+            }
+          }
+          // Если не влезает - предмет просто теряется (или можно добавить логику отмены)
+        }
+      } else if (dragSource.type === 'pocket' && dragSource.index !== undefined) {
+        // Проверка размера и типа для кармана
+        const targetItemWidth = targetItem?.width || 1;
+        const targetItemHeight = targetItem?.height || 1;
+        if (targetItemWidth === 1 && targetItemHeight === 1) {
+          newEquipment.pockets[dragSource.index] = targetItemId;
+        }
+      } else if (dragSource.type === 'equipment' && dragSource.slot) {
+        // Проверка размера и типа для слота экипировки
+        const targetItemWidth = targetItem?.width || 1;
+        const targetItemHeight = targetItem?.height || 1;
+        if (targetItemWidth === 1 && targetItemHeight === 1) {
+          if (targetItem && canPlaceItemInSlotByType(targetItem, dragSource.slot)) {
+            if (dragSource.slot.startsWith('special')) {
+              const idx = parseInt(dragSource.slot.replace('special', ''));
+              if (newEquipment.specials) newEquipment.specials[idx] = targetItemId;
+            } else if (dragSource.slot.startsWith('module')) {
+              const idx = parseInt(dragSource.slot.replace('module', ''));
+              if (newEquipment.modules) newEquipment.modules[idx] = targetItemId;
+            } else {
+              (newEquipment as any)[dragSource.slot] = targetItemId;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. РАЗМЕЩЕНИЕ ПЕРЕТАСКИВАЕМОГО ПРЕДМЕТА В ЦЕЛЬ
     if (['rig', 'bag', 'backpack'].includes(target)) {
       const container = newEquipment[target as 'rig' | 'bag' | 'backpack'];
       if (container && index !== undefined) {
-        // Определяем тип слота в зависимости от контейнера
         const slotInfo = target === 'backpack'
           ? getBackpackSlotInfo(index)
           : getContainerSlotInfo(index);
 
-        // Получаем индексы всех ячеек, которые займёт предмет
         const occupiedIndices = getOccupiedIndices(
           slotInfo.localIndex,
           draggedItem,
@@ -706,17 +850,17 @@ export default function InventoryTab({
           slotInfo.baseIndex
         );
 
-        // Очищаем целевые ячейки от других предметов (если там что-то было)
+        // Очищаем целевые ячейки от других предметов (если swap не выполнен)
         for (const absIdx of occupiedIndices) {
-          if (absIdx < container.items.length && container.items[absIdx] !== dragSource.itemId) {
+          if (absIdx < container.items.length) {
             const existingItem = container.items[absIdx];
-            if (existingItem) {
+            if (existingItem && existingItem !== dragSource.itemId && existingItem !== targetItemId) {
               clearItemFromContainer(container, existingItem);
             }
           }
         }
 
-        // Размещаем предмет во все занимаемые ячейки
+        // Размещаем перетаскиваемый предмет
         for (const absIdx of occupiedIndices) {
           if (absIdx < container.items.length) {
             container.items[absIdx] = dragSource.itemId;
@@ -729,6 +873,9 @@ export default function InventoryTab({
     } else if (target.startsWith('special')) {
       const idx = parseInt(target.replace('special', ''));
       if (newEquipment.specials) newEquipment.specials[idx] = dragSource.itemId;
+    } else if (target.startsWith('module')) {
+      const idx = parseInt(target.replace('module', ''));
+      if (newEquipment.modules) newEquipment.modules[idx] = dragSource.itemId;
     } else {
       (newEquipment as any)[target] = dragSource.itemId;
     }
@@ -737,7 +884,10 @@ export default function InventoryTab({
     handleDragEnd();
   }, [dragSource, equipment, onEquipmentChange, handleDragEnd]);
 
-  // Item click handler
+  // ════════════════════════════════════════════════════════════════════════════
+  // CLICK HANDLERS
+  // ════════════════════════════════════════════════════════════════════════════
+
   const handleItemClick = useCallback((e: MouseEvent, itemId: string, sourceType: string, index?: number) => {
     const item = getItemById(itemId);
     if (!item) return;
@@ -749,18 +899,16 @@ export default function InventoryTab({
     });
   }, []);
 
-  // Use item handler
   const handleUseItem = useCallback((itemId: string) => {
     if (!selectedItem || !onEquipmentChange) return;
 
-    // Remove item from inventory
     const newEquipment = JSON.parse(JSON.stringify(equipment)) as Equipment;
     const { type, index } = selectedItem.source;
 
     if (['rig', 'bag', 'backpack'].includes(type)) {
       const container = newEquipment[type as 'rig' | 'bag' | 'backpack'];
-      if (container && index !== undefined) {
-        container.items[index] = null;
+      if (container) {
+        clearItemFromContainer(container, itemId);
       }
     } else if (type.startsWith('pocket')) {
       const pocketIndex = parseInt(type.replace('pocket', ''));
@@ -772,7 +920,6 @@ export default function InventoryTab({
     setSelectedItem(null);
   }, [selectedItem, equipment, onEquipmentChange, onUseItem]);
 
-  // Drop item handler
   const handleDropItem = useCallback((itemId: string) => {
     if (!selectedItem || !onEquipmentChange) return;
 
@@ -781,8 +928,8 @@ export default function InventoryTab({
 
     if (['rig', 'bag', 'backpack'].includes(type)) {
       const container = newEquipment[type as 'rig' | 'bag' | 'backpack'];
-      if (container && index !== undefined) {
-        container.items[index] = null;
+      if (container) {
+        clearItemFromContainer(container, itemId);
       }
     } else if (type.startsWith('pocket')) {
       const pocketIndex = parseInt(type.replace('pocket', ''));
@@ -793,6 +940,10 @@ export default function InventoryTab({
     onDropItem?.(itemId, type, index);
     setSelectedItem(null);
   }, [selectedItem, equipment, onEquipmentChange, onDropItem]);
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // RENDER
+  // ════════════════════════════════════════════════════════════════════════════
 
   const hasRig = equipment.rig !== null;
   const hasBag = equipment.bag !== null;
@@ -811,11 +962,11 @@ export default function InventoryTab({
         </div>
       </div>
 
-      {/* Основной контент - БЕЗ ПРОКРУТКИ */}
-      <div className="flex gap-3 flex-1 min-h-0">
-        {/* ЛЕВАЯ КОЛОНКА - Экипировка (компактно) */}
+      {/* Основной контент - компактная компоновка */}
+      <div className="flex gap-2 flex-1 min-h-0">
+        {/* ЛЕВАЯ КОЛОНКА - Экипировка */}
         <div className="flex flex-col gap-1 flex-shrink-0">
-          {/* Спец слоты */}
+          {/* Спец слоты (горизонтально) */}
           <div className="flex gap-1">
             {[0, 1, 2].map(i => (
               <CompactEquipmentSlot
@@ -829,11 +980,12 @@ export default function InventoryTab({
                 onDrop={(e) => handleDrop(e, `special${i}`)}
                 onClick={(e) => equipment.specials?.[i] && handleItemClick(e, equipment.specials[i]!, `special${i}`)}
                 isDragOver={dragOverTarget?.type === `special${i}`}
+                isInvalidDrop={dragOverTarget?.type === `special${i}` && invalidDropTarget}
               />
             ))}
           </div>
 
-          {/* Шлем */}
+          {/* Шлем, Броня, Одежда (вертикально) */}
           <CompactEquipmentSlot
             label="ШЛЕМ"
             slotType="helmet"
@@ -843,9 +995,9 @@ export default function InventoryTab({
             onDrop={(e) => handleDrop(e, 'helmet')}
             onClick={(e) => equipment.helmet && handleItemClick(e, equipment.helmet, 'helmet')}
             isDragOver={dragOverTarget?.type === 'helmet'}
+            isInvalidDrop={dragOverTarget?.type === 'helmet' && invalidDropTarget}
           />
 
-          {/* Броня */}
           <CompactEquipmentSlot
             label="БРОНЯ"
             slotType="armor"
@@ -855,9 +1007,9 @@ export default function InventoryTab({
             onDrop={(e) => handleDrop(e, 'armor')}
             onClick={(e) => equipment.armor && handleItemClick(e, equipment.armor, 'armor')}
             isDragOver={dragOverTarget?.type === 'armor'}
+            isInvalidDrop={dragOverTarget?.type === 'armor' && invalidDropTarget}
           />
 
-          {/* Одежда */}
           <CompactEquipmentSlot
             label="ОДЕЖ"
             slotType="clothes"
@@ -867,10 +1019,11 @@ export default function InventoryTab({
             onDrop={(e) => handleDrop(e, 'clothes')}
             onClick={(e) => equipment.clothes && handleItemClick(e, equipment.clothes, 'clothes')}
             isDragOver={dragOverTarget?.type === 'clothes'}
+            isInvalidDrop={dragOverTarget?.type === 'clothes' && invalidDropTarget}
           />
 
-          {/* Карманы */}
-          <div className="flex gap-1 flex-wrap w-[96px]">
+          {/* Карманы (2x2 сетка) */}
+          <div className="grid grid-cols-2 gap-1">
             {[0, 1, 2, 3].map(i => (
               <CompactEquipmentSlot
                 key={i}
@@ -883,47 +1036,50 @@ export default function InventoryTab({
                 onDrop={(e) => handleDrop(e, `pocket${i}`)}
                 onClick={(e) => equipment.pockets?.[i] && handleItemClick(e, equipment.pockets[i]!, `pocket${i}`)}
                 isDragOver={dragOverTarget?.type === `pocket${i}`}
+                isInvalidDrop={dragOverTarget?.type === `pocket${i}` && invalidDropTarget}
               />
             ))}
           </div>
 
-          {/* Оружие и обвесы */}
-          <div className="mt-1 space-y-1">
-            <CompactEquipmentSlot
-              label="ОРУЖИЕ"
-              slotType="weapon"
-              itemId={equipment.weapon}
-              onDragStart={(e) => equipment.weapon && handleDragStart(e, equipment.weapon, 'weapon')}
-              onDragOver={(e) => handleDragOver(e, 'weapon')}
-              onDrop={(e) => handleDrop(e, 'weapon')}
-              onClick={(e) => equipment.weapon && handleItemClick(e, equipment.weapon, 'weapon')}
-              isDragOver={dragOverTarget?.type === 'weapon'}
-            />
-            <div className="flex gap-1">
-              {['scope', 'tactical', 'suppressor'].map((slot, i) => (
-                <CompactEquipmentSlot
-                  key={slot}
-                  label={['ПРЦ', 'ЛЦУ', 'ГЛШ'][i]}
-                  slotType={slot}
-                  itemId={(equipment as any)[slot]}
-                  size="small"
-                  onDragStart={(e) => (equipment as any)[slot] && handleDragStart(e, (equipment as any)[slot], slot)}
-                  onDragOver={(e) => handleDragOver(e, slot)}
-                  onDrop={(e) => handleDrop(e, slot)}
-                  onClick={(e) => (equipment as any)[slot] && handleItemClick(e, (equipment as any)[slot], slot)}
-                  isDragOver={dragOverTarget?.type === slot}
-                />
-              ))}
-            </div>
+          {/* Оружие */}
+          <CompactEquipmentSlot
+            label="ОРУЖИЕ"
+            slotType="weapon"
+            itemId={equipment.weapon}
+            onDragStart={(e) => equipment.weapon && handleDragStart(e, equipment.weapon, 'weapon')}
+            onDragOver={(e) => handleDragOver(e, 'weapon')}
+            onDrop={(e) => handleDrop(e, 'weapon')}
+            onClick={(e) => equipment.weapon && handleItemClick(e, equipment.weapon, 'weapon')}
+            isDragOver={dragOverTarget?.type === 'weapon'}
+            isInvalidDrop={dragOverTarget?.type === 'weapon' && invalidDropTarget}
+          />
+
+          {/* Модули (3 слота, заменили scope/tactical/suppressor) */}
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <CompactEquipmentSlot
+                key={i}
+                label={`М${i + 1}`}
+                slotType={`module${i}`}
+                itemId={equipment.modules?.[i] || null}
+                size="small"
+                onDragStart={(e) => equipment.modules?.[i] && handleDragStart(e, equipment.modules[i]!, `module${i}`)}
+                onDragOver={(e) => handleDragOver(e, `module${i}`)}
+                onDrop={(e) => handleDrop(e, `module${i}`)}
+                onClick={(e) => equipment.modules?.[i] && handleItemClick(e, equipment.modules[i]!, `module${i}`)}
+                isDragOver={dragOverTarget?.type === `module${i}`}
+                isInvalidDrop={dragOverTarget?.type === `module${i}` && invalidDropTarget}
+              />
+            ))}
           </div>
         </div>
 
-        {/* ПРАВАЯ ЧАСТЬ - Контейнеры (компактно сгруппированы) */}
+        {/* ПРАВАЯ ЧАСТЬ - Контейнеры */}
         <div className="flex-1 flex flex-col gap-2 min-w-0">
-          {/* Разгрузка - с подъячейками 2x2 */}
+          {/* Разгрузка */}
           {hasRig && (
             <div className="p-2 bg-gradient-to-r from-red-950/50 to-red-900/30 border border-red-500/30 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">🎽</span>
                 <span className="text-red-400 font-mono text-[10px] uppercase tracking-wider">Разгрузка</span>
                 <span className="text-red-400/50 font-mono text-[10px] ml-auto">
@@ -933,7 +1089,6 @@ export default function InventoryTab({
               <div className="flex gap-1 flex-wrap">
                 {RIG_SLOTS.map((slot) => {
                   if (slot.subCellsCount) {
-                    // Слот с подъячейками
                     const subCellItems = equipment.rig?.items.slice(slot.index * 4, slot.index * 4 + 4) || [null, null, null, null];
                     return (
                       <SubCellSlot2x2
@@ -946,31 +1101,20 @@ export default function InventoryTab({
                         onDrop={(e, subIdx) => handleDrop(e, 'rig', slot.index * 4 + subIdx)}
                         onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'rig', slot.index * 4 + subIdx)}
                         dragOverTarget={dragOverTarget?.type === 'rig' ? dragOverTarget.index ?? null : null}
+                        invalidDropTarget={invalidDropTarget}
                       />
                     );
                   }
-                  return (
-                    <VariableSlot
-                      key={slot.index}
-                      size={slot.size}
-                      itemId={equipment.rig?.items[slot.index] || null}
-                      color="red"
-                      onDragStart={(e) => equipment.rig?.items[slot.index] && handleDragStart(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
-                      onDragOver={(e) => handleDragOver(e, 'rig', slot.index)}
-                      onDrop={(e) => handleDrop(e, 'rig', slot.index)}
-                      onClick={(e) => equipment.rig?.items[slot.index] && handleItemClick(e, equipment.rig.items[slot.index]!, 'rig', slot.index)}
-                      isDragOver={dragOverTarget?.type === 'rig' && dragOverTarget?.index === slot.index}
-                    />
-                  );
+                  return null;
                 })}
               </div>
             </div>
           )}
 
-          {/* Сумка - с подъячейками 2x2 */}
+          {/* Сумка */}
           {hasBag && (
             <div className="p-2 bg-gradient-to-r from-blue-950/50 to-blue-900/30 border border-blue-500/30 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">👜</span>
                 <span className="text-blue-400 font-mono text-[10px] uppercase tracking-wider">Сумка</span>
                 <span className="text-blue-400/50 font-mono text-[10px] ml-auto">
@@ -992,31 +1136,20 @@ export default function InventoryTab({
                         onDrop={(e, subIdx) => handleDrop(e, 'bag', slot.index * 4 + subIdx)}
                         onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'bag', slot.index * 4 + subIdx)}
                         dragOverTarget={dragOverTarget?.type === 'bag' ? dragOverTarget.index ?? null : null}
+                        invalidDropTarget={invalidDropTarget}
                       />
                     );
                   }
-                  return (
-                    <VariableSlot
-                      key={slot.index}
-                      size={slot.size}
-                      itemId={equipment.bag?.items[slot.index] || null}
-                      color="blue"
-                      onDragStart={(e) => equipment.bag?.items[slot.index] && handleDragStart(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
-                      onDragOver={(e) => handleDragOver(e, 'bag', slot.index)}
-                      onDrop={(e) => handleDrop(e, 'bag', slot.index)}
-                      onClick={(e) => equipment.bag?.items[slot.index] && handleItemClick(e, equipment.bag.items[slot.index]!, 'bag', slot.index)}
-                      isDragOver={dragOverTarget?.type === 'bag' && dragOverTarget?.index === slot.index}
-                    />
-                  );
+                  return null;
                 })}
               </div>
             </div>
           )}
 
-          {/* Рюкзак - с подъячейками 2x2 */}
+          {/* Рюкзак */}
           {hasBackpack && (
             <div className="p-2 bg-gradient-to-r from-orange-950/50 to-orange-900/30 border border-orange-500/30 rounded-lg flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">🎒</span>
                 <span className="text-orange-400 font-mono text-[10px] uppercase tracking-wider">Рюкзак</span>
                 <span className="text-orange-400/50 font-mono text-[10px] ml-auto">
@@ -1025,7 +1158,7 @@ export default function InventoryTab({
               </div>
               <div className="flex gap-1 flex-wrap">
                 {BACKPACK_SLOTS.map((slot) => {
-                  // Слоты 2x2 (индексы 0, 1): ячейки 0-3 и 4-7
+                  // Слоты 2x2
                   if (slot.subCellsCount === 4) {
                     const baseIdx = slot.index * 4;
                     const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 4) || [null, null, null, null];
@@ -1040,12 +1173,13 @@ export default function InventoryTab({
                         onDrop={(e, subIdx) => handleDrop(e, 'backpack', baseIdx + subIdx)}
                         onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'backpack', baseIdx + subIdx)}
                         dragOverTarget={dragOverTarget?.type === 'backpack' ? dragOverTarget.index ?? null : null}
+                        invalidDropTarget={invalidDropTarget}
                       />
                     );
                   }
-                  // Слот 2x1 (индекс 2): ячейки 8-9
+                  // Слот 2x1
                   if (slot.subCellsCount === 2) {
-                    const baseIdx = 8; // После двух слотов 2x2 (0-3, 4-7)
+                    const baseIdx = 8;
                     const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 2) || [null, null];
                     return (
                       <SubCellSlot2x1
@@ -1058,15 +1192,15 @@ export default function InventoryTab({
                         onDrop={(e, subIdx) => handleDrop(e, 'backpack', baseIdx + subIdx)}
                         onClick={(e, itemId, subIdx) => handleItemClick(e, itemId, 'backpack', baseIdx + subIdx)}
                         dragOverTarget={dragOverTarget?.type === 'backpack' ? dragOverTarget.index ?? null : null}
+                        invalidDropTarget={invalidDropTarget}
                       />
                     );
                   }
-                  // Слоты 1x1 (индексы 3, 4, 5): ячейки 10, 11, 12
+                  // Слоты 1x1
                   const realIndex = 10 + (slot.index - 3);
                   return (
-                    <VariableSlot
+                    <SubCell
                       key={slot.index}
-                      size={slot.size}
                       itemId={equipment.backpack?.items[realIndex] || null}
                       color="orange"
                       onDragStart={(e) => equipment.backpack?.items[realIndex] && handleDragStart(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
@@ -1074,6 +1208,7 @@ export default function InventoryTab({
                       onDrop={(e) => handleDrop(e, 'backpack', realIndex)}
                       onClick={(e) => equipment.backpack?.items[realIndex] && handleItemClick(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
                       isDragOver={dragOverTarget?.type === 'backpack' && dragOverTarget?.index === realIndex}
+                      isInvalid={invalidDropTarget}
                     />
                   );
                 })}

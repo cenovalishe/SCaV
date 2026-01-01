@@ -107,9 +107,7 @@ const DEFAULT_EQUIPMENT: Equipment = {
   pockets: [null, null, null, null],
   specials: [null, null, null],
   weapon: null,
-  scope: null,
-  tactical: null,
-  suppressor: null,
+  modules: [null, null, null],
   rig: null,
   bag: null,
   backpack: {

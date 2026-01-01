@@ -3,13 +3,14 @@
  * FILE MANIFEST: components/PlayerInspectModal.tsx
  * ═══════════════════════════════════════════════════════════════════════════════
  *
- * PURPOSE: Модальное окно для осмотра другого игрока
+ * PURPOSE: Модальное окно для осмотра другого игрока (v2.0)
  *
  * FEATURES:
  *   - Две вкладки: Персонаж и Инвентарь
  *   - Только просмотр (без возможности взаимодействия)
  *   - Просмотр характеристик предметов
- *   - Копирует UI вкладок текущего игрока
+ *   - Компактная компоновка, соответствующая основному инвентарю
+ *   - Модули вместо scope/tactical/suppressor
  *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
@@ -27,7 +28,7 @@ interface PlayerInspectModalProps {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// КАРТА АВАТАРОВ (копия из CharacterTab)
+// КАРТА АВАТАРОВ
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const AVATAR_MAP: Record<string, string> = {
@@ -197,28 +198,140 @@ function CharacterTabReadOnly({ stats, playerName, equipment }: {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ВКЛАДКА ИНВЕНТАРЯ (READ-ONLY)
+// ВКЛАДКА ИНВЕНТАРЯ (READ-ONLY) - КОМПАКТНАЯ КОМПОНОВКА
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const SLOT_SIZE = 40;
+const SLOT_SIZE = 38;
 
-function ItemSlotReadOnly({ itemId }: { itemId: string | null }) {
+function ItemSlotReadOnly({ itemId, size = 'normal' }: { itemId: string | null; size?: 'small' | 'normal' }) {
   const item = itemId ? getItemById(itemId) : null;
+  const dim = size === 'small' ? SLOT_SIZE - 4 : SLOT_SIZE;
 
   return (
     <div
       className={`
-        w-10 h-10 border border-white/10 bg-zinc-900/50 rounded
+        border border-white/10 bg-black/30 rounded
         flex items-center justify-center
         ${item ? 'hover:border-white/20' : ''}
       `}
+      style={{ width: dim, height: dim }}
       title={item ? `${item.nameRu}` : undefined}
     >
       {item ? (
-        <span className="text-lg">{item.icon}</span>
+        <span className={size === 'small' ? 'text-base' : 'text-lg'}>{item.icon}</span>
       ) : (
-        <div className="text-white/10 text-[8px] font-mono">-</div>
+        <div className="text-white/10 text-[7px] font-mono">-</div>
       )}
+    </div>
+  );
+}
+
+// Компонент слота 2x2 для просмотра
+function SubCellSlot2x2ReadOnly({
+  items,
+  color = 'zinc'
+}: {
+  items: (string | null)[];
+  color?: 'zinc' | 'red' | 'blue' | 'orange';
+}) {
+  const colorSchemes = {
+    zinc: { bg: 'from-zinc-800 to-zinc-900', border: 'border-white/15' },
+    red: { bg: 'from-red-900/40 to-red-950/40', border: 'border-red-500/30' },
+    blue: { bg: 'from-blue-900/40 to-blue-950/40', border: 'border-blue-500/30' },
+    orange: { bg: 'from-orange-900/40 to-orange-950/40', border: 'border-orange-500/30' },
+  };
+  const scheme = colorSchemes[color];
+
+  // Анализируем какие предметы занимают какие ячейки
+  const cellContents: { itemId: string | null; isMain: boolean; size: number }[] = [];
+  const processedItems = new Set<string>();
+
+  for (let i = 0; i < 4; i++) {
+    const itemId = items[i];
+    if (!itemId) {
+      cellContents[i] = { itemId: null, isMain: true, size: 1 };
+      continue;
+    }
+
+    if (processedItems.has(itemId)) {
+      cellContents[i] = { itemId, isMain: false, size: 1 };
+      continue;
+    }
+
+    const item = getItemById(itemId);
+    const itemSize = item?.size || 1;
+    processedItems.add(itemId);
+    cellContents[i] = { itemId, isMain: true, size: itemSize };
+  }
+
+  return (
+    <div
+      className={`grid grid-cols-2 gap-0.5 p-0.5 bg-gradient-to-br ${scheme.bg} border ${scheme.border} rounded`}
+      style={{ width: SLOT_SIZE * 2 + 2, height: SLOT_SIZE * 2 + 2 }}
+    >
+      {cellContents.map((cell, i) => {
+        const item = cell.itemId ? getItemById(cell.itemId) : null;
+
+        if (!cell.isMain && cell.itemId) {
+          return <div key={i} className="w-full h-full" />;
+        }
+
+        // 2x2 предмет
+        if (item && (item.size || 0) >= 4 && i === 0) {
+          return (
+            <div
+              key={i}
+              className="col-span-2 row-span-2 flex items-center justify-center bg-black/30 border border-white/10 rounded"
+              title={item ? `${item.nameRu}` : undefined}
+            >
+              <span className="text-2xl">{item.icon}</span>
+            </div>
+          );
+        }
+
+        // 2x1 горизонтальный
+        if (item && (item.size || 0) === 2 && (item.width || 1) === 2 && (i === 0 || i === 2)) {
+          return (
+            <div
+              key={i}
+              className="col-span-2 flex items-center justify-center bg-black/30 border border-white/10 rounded"
+              title={item ? `${item.nameRu}` : undefined}
+            >
+              <span className="text-xl">{item.icon}</span>
+            </div>
+          );
+        }
+
+        // 1x2 вертикальный
+        if (item && (item.size || 0) === 2 && (item.width || 1) === 1 && (i === 0 || i === 1)) {
+          return (
+            <div
+              key={i}
+              className="row-span-2 flex items-center justify-center bg-black/30 border border-white/10 rounded"
+              style={{ gridColumn: i === 0 ? 1 : 2, gridRow: '1 / 3' }}
+              title={item ? `${item.nameRu}` : undefined}
+            >
+              <span className="text-xl">{item.icon}</span>
+            </div>
+          );
+        }
+
+        // 1x1 стандартный
+        return (
+          <div
+            key={i}
+            className="flex items-center justify-center bg-black/30 border border-white/10 rounded"
+            style={{ width: SLOT_SIZE - 4, height: SLOT_SIZE - 4 }}
+            title={item ? `${item.nameRu}` : undefined}
+          >
+            {item ? (
+              <span className="text-base">{item.icon}</span>
+            ) : (
+              <div className="text-white/10 text-[6px] font-mono">1x1</div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -226,123 +339,84 @@ function ItemSlotReadOnly({ itemId }: { itemId: string | null }) {
 function InventoryTabReadOnly({ equipment }: { equipment: Equipment }) {
   return (
     <div className="h-full flex flex-col p-3">
-      <div className="flex items-center gap-2 pb-2 mb-3 border-b border-white/10">
+      <div className="flex items-center gap-2 pb-2 mb-2 border-b border-white/10">
         <div className="w-1 h-4 bg-amber-500 rounded-full" />
         <span className="text-white/80 font-mono text-xs uppercase tracking-[0.2em]">Инвентарь</span>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0 overflow-y-auto">
-        {/* Экипировка */}
-        <div className="flex flex-col gap-2 flex-shrink-0">
+      <div className="flex gap-3 flex-1 min-h-0 overflow-y-auto">
+        {/* Экипировка - компактная компоновка */}
+        <div className="flex flex-col gap-1 flex-shrink-0">
           {/* Спец слоты */}
           <div className="flex gap-1">
             {[0, 1, 2].map(i => (
-              <div key={i} className="relative">
-                <ItemSlotReadOnly itemId={equipment.specials?.[i] || null} />
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                  С{i + 1}
-                </span>
-              </div>
+              <ItemSlotReadOnly key={i} itemId={equipment.specials?.[i] || null} size="small" />
             ))}
           </div>
 
           {/* Шлем, Броня, Одежда */}
-          <div className="space-y-1">
-            <div className="relative">
-              <ItemSlotReadOnly itemId={equipment.helmet} />
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                ШЛМ
-              </span>
-            </div>
-            <div className="relative">
-              <ItemSlotReadOnly itemId={equipment.armor} />
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                БРН
-              </span>
-            </div>
-            <div className="relative">
-              <ItemSlotReadOnly itemId={equipment.clothes} />
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                ОДЖ
-              </span>
-            </div>
-          </div>
+          <ItemSlotReadOnly itemId={equipment.helmet} />
+          <ItemSlotReadOnly itemId={equipment.armor} />
+          <ItemSlotReadOnly itemId={equipment.clothes} />
 
           {/* Карманы */}
-          <div className="flex gap-1 flex-wrap w-[88px]">
+          <div className="grid grid-cols-2 gap-1">
             {[0, 1, 2, 3].map(i => (
-              <div key={i} className="relative">
-                <ItemSlotReadOnly itemId={equipment.pockets?.[i] || null} />
-                <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                  К{i + 1}
-                </span>
-              </div>
+              <ItemSlotReadOnly key={i} itemId={equipment.pockets?.[i] || null} size="small" />
             ))}
           </div>
 
-          {/* Оружие и обвесы */}
-          <div className="mt-1 space-y-1">
-            <div className="relative">
-              <ItemSlotReadOnly itemId={equipment.weapon} />
-              <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                ОРЖ
-              </span>
-            </div>
-            <div className="flex gap-1">
-              {['scope', 'tactical', 'suppressor'].map((slot, i) => (
-                <div key={slot} className="relative">
-                  <ItemSlotReadOnly itemId={(equipment as any)[slot]} />
-                  <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 text-[7px] text-white/30 font-mono">
-                    {['ПРЦ', 'ЛЦУ', 'ГЛШ'][i]}
-                  </span>
-                </div>
-              ))}
-            </div>
+          {/* Оружие */}
+          <ItemSlotReadOnly itemId={equipment.weapon} />
+
+          {/* Модули */}
+          <div className="flex gap-1">
+            {[0, 1, 2].map(i => (
+              <ItemSlotReadOnly key={i} itemId={equipment.modules?.[i] || null} size="small" />
+            ))}
           </div>
         </div>
 
         {/* Контейнеры */}
-        <div className="flex-1 flex flex-col gap-3">
+        <div className="flex-1 flex flex-col gap-2 min-w-0">
           {/* Разгрузка */}
           {equipment.rig && (
             <div className="p-2 bg-gradient-to-r from-red-950/50 to-red-900/30 border border-red-500/30 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">🎽</span>
                 <span className="text-red-400 font-mono text-[10px] uppercase tracking-wider">Разгрузка</span>
                 <span className="text-red-400/50 font-mono text-[10px] ml-auto">
                   {equipment.rig.items.filter(i => i !== null).length}/{equipment.rig.items.length}
                 </span>
               </div>
-              <div className="flex gap-1 flex-wrap">
-                {equipment.rig.items.slice(0, 4).map((itemId, i) => (
-                  <ItemSlotReadOnly key={i} itemId={itemId} />
-                ))}
-              </div>
+              <SubCellSlot2x2ReadOnly
+                items={equipment.rig.items.slice(0, 4)}
+                color="red"
+              />
             </div>
           )}
 
           {/* Сумка */}
           {equipment.bag && (
             <div className="p-2 bg-gradient-to-r from-blue-950/50 to-blue-900/30 border border-blue-500/30 rounded-lg">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">👜</span>
                 <span className="text-blue-400 font-mono text-[10px] uppercase tracking-wider">Сумка</span>
                 <span className="text-blue-400/50 font-mono text-[10px] ml-auto">
                   {equipment.bag.items.filter(i => i !== null).length}/{equipment.bag.items.length}
                 </span>
               </div>
-              <div className="flex gap-1 flex-wrap">
-                {equipment.bag.items.slice(0, 4).map((itemId, i) => (
-                  <ItemSlotReadOnly key={i} itemId={itemId} />
-                ))}
-              </div>
+              <SubCellSlot2x2ReadOnly
+                items={equipment.bag.items.slice(0, 4)}
+                color="blue"
+              />
             </div>
           )}
 
           {/* Рюкзак */}
           {equipment.backpack && (
             <div className="p-2 bg-gradient-to-r from-orange-950/50 to-orange-900/30 border border-orange-500/30 rounded-lg flex-1">
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-1">
                 <span className="text-sm">🎒</span>
                 <span className="text-orange-400 font-mono text-[10px] uppercase tracking-wider">Рюкзак</span>
                 <span className="text-orange-400/50 font-mono text-[10px] ml-auto">
@@ -350,8 +424,38 @@ function InventoryTabReadOnly({ equipment }: { equipment: Equipment }) {
                 </span>
               </div>
               <div className="flex gap-1 flex-wrap">
-                {equipment.backpack.items.map((itemId, i) => (
-                  <ItemSlotReadOnly key={i} itemId={itemId} />
+                {/* Два слота 2x2 */}
+                <SubCellSlot2x2ReadOnly
+                  items={equipment.backpack.items.slice(0, 4)}
+                  color="orange"
+                />
+                <SubCellSlot2x2ReadOnly
+                  items={equipment.backpack.items.slice(4, 8)}
+                  color="orange"
+                />
+                {/* Слот 2x1 */}
+                <div className="flex gap-0.5 p-0.5 bg-gradient-to-br from-orange-900/40 to-orange-950/40 border border-orange-500/30 rounded"
+                     style={{ width: SLOT_SIZE * 2 + 2, height: SLOT_SIZE }}>
+                  {equipment.backpack.items.slice(8, 10).map((itemId, i) => {
+                    const item = itemId ? getItemById(itemId) : null;
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center justify-center bg-black/30 border border-white/10 rounded"
+                        style={{ width: SLOT_SIZE - 4, height: SLOT_SIZE - 4 }}
+                      >
+                        {item ? (
+                          <span className="text-base">{item.icon}</span>
+                        ) : (
+                          <div className="text-white/10 text-[6px] font-mono">1x1</div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {/* Три слота 1x1 */}
+                {equipment.backpack.items.slice(10, 13).map((itemId, i) => (
+                  <ItemSlotReadOnly key={i} itemId={itemId} size="small" />
                 ))}
               </div>
             </div>
@@ -387,9 +491,7 @@ export default function PlayerInspectModal({ player, onClose }: PlayerInspectMod
     pockets: [null, null, null, null],
     specials: [null, null, null],
     weapon: null,
-    scope: null,
-    tactical: null,
-    suppressor: null,
+    modules: [null, null, null],
     rig: null,
     bag: null,
     backpack: null
@@ -398,7 +500,7 @@ export default function PlayerInspectModal({ player, onClose }: PlayerInspectMod
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div
-        className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/20 rounded-xl shadow-2xl w-[600px] max-h-[80vh] overflow-hidden"
+        className="bg-gradient-to-br from-zinc-900 to-zinc-950 border border-white/20 rounded-xl shadow-2xl w-[550px] max-h-[80vh] overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Заголовок */}
