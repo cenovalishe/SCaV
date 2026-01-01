@@ -536,3 +536,66 @@ export async function getNightCycleTimerInfo(gameId: string) {
     return { success: false, message: 'Failed to get timer info' };
   }
 }
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ADMIN: УСТАНОВКА ВРЕМЕНИ
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Принудительно установить конкретную ночь и час.
+ * Пересчитывает startedAt так, чтобы система считала это время "честным".
+ */
+export async function adminSetNightCycle(gameId: string, targetNight: number, targetHour: number) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const gameRef = getNightCycleRef(gameId);
+    if (!gameRef) return { success: false, message: 'Ref error' };
+
+    // 1. Вычисляем, сколько времени ДОЛЖНО было пройти, чтобы наступил этот момент
+    // (Ночь-1) * ДлительностьНочи + (Час-1) * ДлительностьЧаса
+    // Вычитаем 1, так как счет начинается с 1, а не с 0
+    const targetElapsedMs = 
+      ((targetNight - 1) * NIGHT_CYCLE_TIMINGS.nightDurationMs) + 
+      ((targetHour - 1) * NIGHT_CYCLE_TIMINGS.hourDurationMs);
+
+    const now = Date.now();
+    
+    // 2. Сдвигаем точку старта в прошлое на вычисленную величину
+    const newStartedAt = now - targetElapsedMs;
+    
+    // 3. Пересчитываем конец таймера
+    const newTimerEndAt = newStartedAt + NIGHT_CYCLE_TIMINGS.totalDurationMs;
+
+    const updatedCycle: GlobalNightCycle = {
+      isActive: true,
+      startedAt: newStartedAt,
+      timerEndAt: newTimerEndAt,
+      currentNight: targetNight,
+      currentHour: targetHour,
+      lastHourUpdateAt: now,
+      lastNightUpdateAt: now,
+    };
+
+    // 4. Сохраняем "честное" состояние
+    await gameRef.update({
+      globalNightCycle: updatedCycle,
+      lastUpdated: FieldValue.serverTimestamp(),
+    });
+
+    // 5. Сразу обновляем сложность аниматроников под новое время
+    await updateAnimatronicAILevels(gameId, targetNight, targetHour);
+
+    revalidatePath('/');
+    return { success: true, message: `Time warp to Night ${targetNight}, ${targetHour} AM`, cycle: updatedCycle };
+
+  } catch (error) {
+    console.error('Admin set time error:', error);
+    return { success: false, message: 'Failed to set time' };
+  }
+}
+
+
