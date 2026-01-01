@@ -85,18 +85,18 @@ export function useGame(gameId: string, playerId: string) {
   const [enemies, setEnemies] = useState<AnimatronicState[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // ★ Новое состояние для глобальных данных игры
+  // Состояние для глобальных данных игры
   const [nightCycle, setNightCycle] = useState<GlobalNightCycle>(DEFAULT_NIGHT_CYCLE);
   
   // Локальные вычисляемые значения
   const [calculatedNight, setCalculatedNight] = useState(1);
   const [calculatedHour, setCalculatedHour] = useState(12);
 
-  // 1. Подписка на ТЕКУЩЕГО ИГРОКА (без изменений)
+  // 1. Подписка на ТЕКУЩЕГО ИГРОКА
   useEffect(() => {
     if (!gameId || !playerId) return;
 
-    const playerRef = doc(db, 'games', gameId, 'players', playerId);
+    const playerRef = doc(dbClient, 'games', gameId, 'players', playerId);
     const unsubscribe = onSnapshot(playerRef, (doc) => {
       if (doc.exists()) {
         setPlayer({ id: doc.id, ...doc.data() } as PlayerState);
@@ -107,30 +107,28 @@ export function useGame(gameId: string, playerId: string) {
     return () => unsubscribe();
   }, [gameId, playerId]);
 
-  // 2. Подписка на ВСЕХ ИГРОКОВ (для списка) - (без изменений)
+  // 2. Подписка на ВСЕХ ИГРОКОВ (для списка)
   useEffect(() => {
     if (!gameId) return;
     
-    // В идеале тоже сделать onSnapshot для коллекции, если нужен реал-тайм список
-    // Но для экономии чтений можно оставить так, или переделать на onSnapshot
     const fetchPlayers = async () => {
-      const querySnapshot = await getDocs(collection(db, 'games', gameId, 'players'));
+      const playersRef = collection(dbClient, 'games', gameId, 'players');
+      const querySnapshot = await getDocs(playersRef);
       const players = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PlayerState));
       setAllPlayers(players);
     };
     
-    // Вызываем один раз и ставим интервал, либо меняем на onSnapshot
     fetchPlayers();
     const interval = setInterval(fetchPlayers, 5000); 
     
     return () => clearInterval(interval);
   }, [gameId]);
 
-  // 3. Подписка на ВРАГОВ (без изменений)
+  // 3. Подписка на ВРАГОВ
   useEffect(() => {
     if (!gameId) return;
 
-    const enemiesRef = collection(db, 'games', gameId, 'enemies');
+    const enemiesRef = collection(dbClient, 'games', gameId, 'enemies');
     const unsubscribe = onSnapshot(enemiesRef, (snapshot) => {
       const enemiesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AnimatronicState));
       setEnemies(enemiesData);
@@ -139,12 +137,12 @@ export function useGame(gameId: string, playerId: string) {
     return () => unsubscribe();
   }, [gameId]);
 
-  // ★ 4. ИСПРАВЛЕНИЕ: Подписка на ГЛОБАЛЬНЫЙ ДОКУМЕНТ ИГРЫ (NightCycle)
+  // 4. Подписка на ГЛОБАЛЬНЫЙ ДОКУМЕНТ ИГРЫ (для NightCycle)
   useEffect(() => {
     if (!gameId) return;
 
     // Слушаем документ самой игры (games/game_alpha)
-    const gameRef = doc(db, 'games', gameId);
+    const gameRef = doc(dbClient, 'games', gameId);
     
     const unsubscribe = onSnapshot(gameRef, (docSnapshot) => {
       if (docSnapshot.exists()) {
@@ -161,10 +159,11 @@ export function useGame(gameId: string, playerId: string) {
     return () => unsubscribe();
   }, [gameId]);
 
-  // ★ 5. Локальный таймер для обновления Часа/Ночи на клиенте
+  // 5. Локальный таймер для обновления Часа/Ночи на клиенте
   useEffect(() => {
     if (!nightCycle.isActive || !nightCycle.startedAt) {
-        setCalculatedNight(nightCycle.nightNumber || 1);
+        // ★ ИСПРАВЛЕНО: nightNumber -> currentNight
+        setCalculatedNight(nightCycle.currentNight || 1);
         setCalculatedHour(12); // Дефолтное время
         return;
     }
@@ -175,9 +174,8 @@ export function useGame(gameId: string, playerId: string) {
         setCalculatedHour(result.hour);
     };
 
-    // Обновляем сразу и запускаем интервал
     updateTime();
-    const interval = setInterval(updateTime, 1000); // Обновляем каждую секунду
+    const interval = setInterval(updateTime, 1000);
 
     return () => clearInterval(interval);
   }, [nightCycle]);
@@ -187,8 +185,8 @@ export function useGame(gameId: string, playerId: string) {
     allPlayers,
     enemies,
     loading,
-    nightCycle,      // Возвращаем актуальные данные
-    calculatedNight, // Вычисленная ночь
-    calculatedHour   // Вычисленный час
+    nightCycle,
+    calculatedNight,
+    calculatedHour
   };
 }
