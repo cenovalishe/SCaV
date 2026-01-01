@@ -1079,3 +1079,123 @@ function getAnimatronicColor(id: string): string {
 }
 
 // /END_ANCHOR:GAMEACTIONS/RESPAWN
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:GAMEACTIONS/GIVE_ITEM
+// Выдача предмета игроку (для квестов, событий и механик)
+// КОНТРАКТ: Приоритет для key_card: specials -> pockets -> containers
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export async function givePlayerItem(gameId: string, playerId: string, itemId: string) {
+  if (!dbAdmin) {
+    return { success: false, message: 'Firebase not configured' };
+  }
+
+  try {
+    const playerRef = dbAdmin.collection('games').doc(gameId).collection('players').doc(playerId);
+    
+    // Используем транзакцию, чтобы избежать гонки данных при обновлении инвентаря
+    const result = await dbAdmin.runTransaction(async (t) => {
+      const playerDoc = await t.get(playerRef);
+      if (!playerDoc.exists) throw new Error('Player not found');
+
+      const playerData = playerDoc.data();
+      const equipment = (playerData?.equipment || {
+        pockets: [null, null, null, null],
+        specials: [null, null, null],
+        rig: null,
+        bag: null,
+        backpack: null
+      }) as Equipment;
+
+      // Клонируем объект, чтобы не мутировать исходный
+      const newEquipment = JSON.parse(JSON.stringify(equipment));
+
+      // Инициализируем массивы, если они undefined
+      if (!newEquipment.specials) newEquipment.specials = [null, null, null];
+      if (!newEquipment.pockets) newEquipment.pockets = [null, null, null, null];
+
+      let placed = false;
+      let slotName = '';
+
+      // 1. ПРИОРИТЕТ 1: Спец-слоты (только для key_card и ключей)
+      if (itemId === 'key_card' || itemId.includes('key')) {
+        for (let i = 0; i < newEquipment.specials.length; i++) {
+          if (newEquipment.specials[i] === null) {
+            newEquipment.specials[i] = itemId;
+            placed = true;
+            slotName = `Спец-слот ${i + 1}`;
+            break;
+          }
+        }
+      }
+
+      // 2. ПРИОРИТЕТ 2: Карманы
+      if (!placed) {
+        for (let i = 0; i < newEquipment.pockets.length; i++) {
+          if (newEquipment.pockets[i] === null) {
+            newEquipment.pockets[i] = itemId;
+            placed = true;
+            slotName = `Карман ${i + 1}`;
+            break;
+          }
+        }
+      }
+
+      // 3. ПРИОРИТЕТ 3: Разгрузка
+      if (!placed && newEquipment.rig?.items) {
+        for (let i = 0; i < newEquipment.rig.items.length; i++) {
+          if (newEquipment.rig.items[i] === null) {
+            newEquipment.rig.items[i] = itemId;
+            placed = true;
+            slotName = 'Разгрузка';
+            break;
+          }
+        }
+      }
+
+      // 4. ПРИОРИТЕТ 4: Сумка
+      if (!placed && newEquipment.bag?.items) {
+        for (let i = 0; i < newEquipment.bag.items.length; i++) {
+          if (newEquipment.bag.items[i] === null) {
+            newEquipment.bag.items[i] = itemId;
+            placed = true;
+            slotName = 'Сумка';
+            break;
+          }
+        }
+      }
+
+      // 5. ПРИОРИТЕТ 5: Рюкзак
+      if (!placed && newEquipment.backpack?.items) {
+        for (let i = 0; i < newEquipment.backpack.items.length; i++) {
+          if (newEquipment.backpack.items[i] === null) {
+            newEquipment.backpack.items[i] = itemId;
+            placed = true;
+            slotName = 'Рюкзак';
+            break;
+          }
+        }
+      }
+
+      if (placed) {
+        t.update(playerRef, {
+          equipment: newEquipment,
+          lastUpdated: FieldValue.serverTimestamp()
+        });
+        return { success: true, message: `Предмет получен: ${itemId} (${slotName})` };
+      } else {
+        return { success: false, message: 'Нет места в инвентаре!' };
+      }
+    });
+
+    revalidatePath('/', 'layout');
+    return result;
+
+  } catch (e) {
+    console.error('Error giving item:', e);
+    return { success: false, message: 'Ошибка выдачи предмета' };
+  }
+}
+
