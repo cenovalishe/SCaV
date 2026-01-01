@@ -85,7 +85,6 @@ export interface CharacterStats {
   speed: number;       // СКОРОСТЬ - приоритет хода
   stealth: number;     // СКРЫТНОСТЬ - шанс избежать встречи
   luck: number;        // УДАЧА - шанс редкого лута
-  capacity: number;    // ВМЕСТИМОСТЬ - макс. вес инвентаря
   hp: number;          // ХП - текущее здоровье
   maxHp: number;       // Максимальное ХП
   stamina: number;     // Очки выносливости (текущие)
