@@ -144,25 +144,31 @@ export default function PvPEncounter({
     }
   }, [isInitiator, phase, handleInitiatePvP]);
 
-  // Если у игрока уже есть pvpState, синхронизируем
+  // [FIX] Синхронизация с серверным состоянием (Server is Source of Truth)
   useEffect(() => {
-    if (currentPlayer.pvpState && !pvpState) {
-      setPvpState(currentPlayer.pvpState);
-      setCombatLog(currentPlayer.pvpState.combatLog);
+    if (currentPlayer.pvpState) {
+      const serverState = currentPlayer.pvpState;
+      
+      // Всегда обновляем локальный стейт данными с сервера
+      setPvpState(serverState);
+      setCombatLog(serverState.combatLog);
 
-      if (currentPlayer.pvpState.status === 'pending') {
+      // Синхронизируем фазы
+      if (serverState.status === 'pending') {
         setPhase('response_pending');
-      } else if (currentPlayer.pvpState.status === 'in_progress') {
+      } else if (serverState.status === 'in_progress') {
         setPhase('combat');
-      } else if (currentPlayer.pvpState.status === 'completed') {
-        if (currentPlayer.pvpState.outcome === 'retreat' || currentPlayer.pvpState.outcome === 'peaceful') {
-          onComplete({ outcome: currentPlayer.pvpState.outcome });
+      } else if (serverState.status === 'completed') {
+        if (serverState.outcome === 'retreat' || serverState.outcome === 'peaceful') {
+           // Проверяем, не завершен ли уже бой локально, чтобы избежать цикла
+           // Но так как onComplete обычно закрывает компонент, это безопасно
+           onComplete({ outcome: serverState.outcome });
         } else {
-          setPhase('loot_selection');
+           setPhase('loot_selection');
         }
       }
     }
-  }, [currentPlayer.pvpState, pvpState, onComplete]);
+  }, [currentPlayer.pvpState, onComplete]);
 
   if (!pvpState) {
     return (
