@@ -93,7 +93,6 @@ const DEFAULT_STATS: CharacterStats = {
   speed: 1,
   stealth: 0,
   luck: 0,
-  capacity: 20,
   hp: 100,
   maxHp: 100,
   stamina: 7,
