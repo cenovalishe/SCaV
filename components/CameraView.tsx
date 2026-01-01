@@ -313,7 +313,7 @@ export default function CameraView({
               </span>
             </div>
             <div className="font-mono text-white/60 text-xs leading-relaxed">
-              Для повторного входа необходима ключ-карта из <span className="text-purple-400">Офиса (Y)</span>
+              Для побега необходима ключ-карта из <span className="text-purple-400">Офиса (Y)</span>
             </div>
           </div>
         )}

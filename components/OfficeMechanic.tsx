@@ -205,7 +205,12 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
     ctx.fillText('🔋', centerX, centerY);
   }, []);
 
-  // Рисуем колесо для количества аниматроников
+  // Веса для количества аниматроников (взвешенные сегменты)
+  // 0=35%, 1=30%, 2=20%, 3=10%, 4=5%
+  const ANIMATRONIC_WEIGHTS = [35, 30, 20, 10, 5];
+  const ANIMATRONIC_TOTAL_WEIGHT = ANIMATRONIC_WEIGHTS.reduce((a, b) => a + b, 0);
+
+  // Рисуем колесо для количества аниматроников (ВЗВЕШЕННЫЕ сегменты)
   const drawAnimatronicsWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -219,14 +224,16 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 5 сегментов (0-4 аниматроника)
-    const segments = 5;
-    const segmentAngle = (2 * Math.PI) / segments;
+    // 5 сегментов (0-4 аниматроника) с РАЗНЫМИ размерами
     const colors = ['#22C55E', '#84CC16', '#EAB308', '#F97316', '#EF4444']; // Зелёный → Красный
 
-    for (let i = 0; i < segments; i++) {
-      const startAngle = i * segmentAngle - Math.PI / 2;
-      const endAngle = startAngle + segmentAngle;
+    let currentAngle = -Math.PI / 2; // Начинаем сверху
+
+    for (let i = 0; i < 5; i++) {
+      // Угол пропорционален весу
+      const segmentAngle = (ANIMATRONIC_WEIGHTS[i] / ANIMATRONIC_TOTAL_WEIGHT) * (2 * Math.PI);
+      const startAngle = currentAngle;
+      const endAngle = currentAngle + segmentAngle;
 
       ctx.beginPath();
       ctx.moveTo(centerX, centerY);
@@ -239,7 +246,7 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // Текст (с правильной ориентацией)
+      // Текст (в центре сегмента)
       const midAngle = startAngle + segmentAngle / 2;
       const textX = centerX + Math.cos(midAngle) * (radius * 0.65);
       const textY = centerY + Math.sin(midAngle) * (radius * 0.65);
@@ -256,6 +263,8 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.shadowBlur = 4;
       ctx.fillText(i.toString(), 0, 0);
       ctx.restore();
+
+      currentAngle = endAngle;
     }
 
     // Центральный круг
@@ -270,7 +279,7 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
     ctx.fillText('🤖', centerX, centerY);
   }, []);
 
-  // Рисуем колесо урона с комбинированными значениями аниматроников
+  // Рисуем колесо урона с ИНДИВИДУАЛЬНЫМИ числами (1-10, 11-20, и т.д.) для каждого аниматроника
   const drawDamageWheel = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -298,23 +307,21 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       return;
     }
 
-    // Создаём сегменты для каждого аниматроника + комбинированный урон
-    // Каждый аниматроник имеет свой диапазон урона
+    // Создаём сегменты с ИНДИВИДУАЛЬНЫМИ числами от 1 до 10 для каждого аниматроника
+    // Например: Чика 1-10, Бонни 11-20, Фредди 21-30, Фокси 31-40
     const damageSegments: { damage: number; color: string; label: string }[] = [];
 
-    // Добавляем сегменты для каждого аниматроника (их индивидуальный урон)
-    animatronicsAtDoors.forEach(a => {
-      const baseDamage = a.aiLevel * 5; // 5-25 урона в зависимости от уровня
-      damageSegments.push({ damage: baseDamage, color: a.color, label: a.name });
-      damageSegments.push({ damage: baseDamage + 5, color: a.color, label: a.name });
+    animatronicsAtDoors.forEach((a, animIndex) => {
+      // Каждый аниматроник получает диапазон 1-10 со смещением
+      const baseOffset = animIndex * 10;
+      for (let num = 1; num <= 10; num++) {
+        damageSegments.push({
+          damage: baseOffset + num,
+          color: a.color,
+          label: a.name.substring(0, 3) // Краткое имя
+        });
+      }
     });
-
-    // Добавляем комбинированные сегменты (урон от всех вместе)
-    if (animatronicsAtDoors.length > 1) {
-      const combinedDamage = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 5, 0);
-      damageSegments.push({ damage: combinedDamage, color: '#DC2626', label: 'ВСЕ!' });
-      damageSegments.push({ damage: Math.round(combinedDamage * 1.5), color: '#7F1D1D', label: 'КРИТ!' });
-    }
 
     const segments = damageSegments.length;
     const segmentAngle = (2 * Math.PI) / segments;
@@ -332,27 +339,27 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       ctx.fillStyle = seg.color;
       ctx.fill();
       ctx.strokeStyle = '#000';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 1;
       ctx.stroke();
 
-      // Текст урона (с правильной ориентацией)
+      // Текст урона (только число, без имени - слишком мало места)
       const midAngle = startAngle + segmentAngle / 2;
-      const textX = centerX + Math.cos(midAngle) * (radius * 0.6);
-      const textY = centerY + Math.sin(midAngle) * (radius * 0.6);
+      const textX = centerX + Math.cos(midAngle) * (radius * 0.7);
+      const textY = centerY + Math.sin(midAngle) * (radius * 0.7);
 
       ctx.save();
       ctx.translate(textX, textY);
       const textRotation = midAngle + Math.PI / 2;
       ctx.rotate(textRotation);
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 20px monospace';
+      // Размер шрифта зависит от количества сегментов
+      const fontSize = segments > 20 ? 10 : segments > 10 ? 14 : 18;
+      ctx.font = `bold ${fontSize}px monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.shadowColor = '#000';
-      ctx.shadowBlur = 4;
-      ctx.fillText(`-${seg.damage}`, 0, -8);
-      ctx.font = 'bold 10px monospace';
-      ctx.fillText(seg.label, 0, 8);
+      ctx.shadowBlur = 3;
+      ctx.fillText(`${seg.damage}`, 0, 0);
       ctx.restore();
     });
 
@@ -369,16 +376,21 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
   }, [animatronicsAtDoors]);
 
   // Спин колеса
+  // FIX: Корректный расчёт угла для совмещения стрелки с результатом
   const spinWheel = useCallback((segments: number, onResult: (index: number) => void) => {
     setIsSpinning(true);
 
     const targetIndex = Math.floor(Math.random() * segments);
     const segmentAngle = 360 / segments;
-    const targetAngle = 360 - (targetIndex * segmentAngle + segmentAngle / 2);
+    // Стрелка указывает на верх (0°), сегменты начинаются с верха (-90° в canvas = 0° в CSS)
+    // Для попадания в центр сегмента targetIndex нужно повернуть на:
+    // (segments - targetIndex) * segmentAngle - segmentAngle/2
+    const targetAngle = (segments - targetIndex) * segmentAngle - segmentAngle / 2;
     const spins = 5 + Math.floor(Math.random() * 3);
     const finalRotation = spins * 360 + targetAngle;
 
-    setWheelRotation(prev => prev + finalRotation);
+    // Сбрасываем на 0 и устанавливаем новое значение для точного позиционирования
+    setWheelRotation(finalRotation);
 
     setTimeout(() => {
       setIsSpinning(false);
@@ -422,9 +434,38 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
     });
   }, [spinWheel, drawAnimatronicsWheel]);
 
-  // Спин колеса аниматроников
+  // Спин колеса аниматроников (ВЗВЕШЕННЫЙ)
   const spinAnimatronicsWheel = useCallback(() => {
-    spinWheel(5, (count) => {
+    setIsSpinning(true);
+
+    // Выбираем результат с учётом весов
+    const random = Math.random() * ANIMATRONIC_TOTAL_WEIGHT;
+    let cumulative = 0;
+    let targetIndex = 0;
+    for (let i = 0; i < ANIMATRONIC_WEIGHTS.length; i++) {
+      cumulative += ANIMATRONIC_WEIGHTS[i];
+      if (random < cumulative) {
+        targetIndex = i;
+        break;
+      }
+    }
+
+    // Вычисляем угол для попадания в центр взвешенного сегмента
+    let segmentStartAngle = 0;
+    for (let i = 0; i < targetIndex; i++) {
+      segmentStartAngle += (ANIMATRONIC_WEIGHTS[i] / ANIMATRONIC_TOTAL_WEIGHT) * 360;
+    }
+    const segmentAngle = (ANIMATRONIC_WEIGHTS[targetIndex] / ANIMATRONIC_TOTAL_WEIGHT) * 360;
+    const targetAngle = 360 - (segmentStartAngle + segmentAngle / 2);
+
+    const spins = 5 + Math.floor(Math.random() * 3);
+    const finalRotation = spins * 360 + targetAngle;
+
+    setWheelRotation(finalRotation);
+
+    setTimeout(() => {
+      setIsSpinning(false);
+      const count = targetIndex;
       // Выбираем случайных аниматроников
       const shuffled = [...ANIMATRONIC_SPAWNS].sort(() => Math.random() - 0.5);
       const selected = shuffled.slice(0, count).map(a => ({
@@ -435,34 +476,34 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       }));
       setAnimatronicsAtDoors(selected);
       setTimeout(() => setPhase('survival_check'), 1500);
-    });
-  }, [spinWheel]);
+    }, 4000);
+  }, []);
 
   // Расчёт шанса выживания
-  // Батарея используется как модификатор сложности
+  // ЗНАЧИТЕЛЬНО УВЕЛИЧЕН базовый шанс, время НЕ влияет
   const calculateSurvivalChance = useCallback(() => {
     if (!batteryLevel) return 0;
 
-    // Базовый шанс 50%
-    let baseChance = 50;
+    // Высокий базовый шанс 85%
+    let baseChance = 85;
 
-    // Каждый аниматроник снижает шанс (10-20 на каждого в зависимости от aiLevel)
-    const animatronicPenalty = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 4, 0);
+    // Каждый аниматроник снижает шанс (уменьшен штраф: 3-15 на каждого в зависимости от aiLevel)
+    const animatronicPenalty = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 3, 0);
 
-    // Время влияет (позже = сложнее, 0-25% штраф)
-    const timePenalty = currentHour ? (currentHour - 1) * 5 : 0;
+    // Время НЕ влияет на шанс выживания (убрано по запросу)
+    // const timePenalty = 0;
 
     // БАТАРЕЯ КАК МОДИФИКАТОР СЛОЖНОСТИ
-    // Высокий заряд = бонус к шансу, низкий заряд = штраф
-    // 100% батареи = +40% к шансу
+    // Высокий заряд = бонус к шансу, низкий заряд = небольшой штраф
+    // 100% батареи = +20% к шансу
     // 50% батареи = +0% (нейтрально)
-    // 10% батареи = -32% к шансу
-    const batteryModifier = (batteryLevel - 50) * 0.8;
+    // 10% батареи = -16% к шансу
+    const batteryModifier = (batteryLevel - 50) * 0.4;
 
-    const finalChance = baseChance - animatronicPenalty - timePenalty + batteryModifier;
+    const finalChance = baseChance - animatronicPenalty + batteryModifier;
 
-    return Math.max(5, Math.min(95, finalChance)); // 5-95%
-  }, [batteryLevel, animatronicsAtDoors, currentHour]);
+    return Math.max(20, Math.min(98, finalChance)); // 20-98%
+  }, [batteryLevel, animatronicsAtDoors]);
 
   // Проверка выживания
   const checkSurvival = useCallback(() => {
@@ -491,6 +532,7 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
   }, [calculateSurvivalChance, currentHour, drawDamageWheel]);
 
   // Построение массива сегментов урона (для расчёта результата спина)
+  // ИНДИВИДУАЛЬНЫЕ числа 1-10, 11-20, и т.д. для каждого аниматроника
   const getDamageSegments = useCallback(() => {
     if (animatronicsAtDoors.length === 0) {
       return [{ damage: 10, color: '#EF4444', label: 'МИН' }];
@@ -498,19 +540,17 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
 
     const segments: { damage: number; color: string; label: string }[] = [];
 
-    // Сегменты для каждого аниматроника
-    animatronicsAtDoors.forEach(a => {
-      const baseDamage = a.aiLevel * 5;
-      segments.push({ damage: baseDamage, color: a.color, label: a.name });
-      segments.push({ damage: baseDamage + 5, color: a.color, label: a.name });
+    // Каждый аниматроник получает числа 1-10 со смещением
+    animatronicsAtDoors.forEach((a, animIndex) => {
+      const baseOffset = animIndex * 10;
+      for (let num = 1; num <= 10; num++) {
+        segments.push({
+          damage: baseOffset + num,
+          color: a.color,
+          label: a.name.substring(0, 3)
+        });
+      }
     });
-
-    // Комбинированные сегменты
-    if (animatronicsAtDoors.length > 1) {
-      const combinedDamage = animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 5, 0);
-      segments.push({ damage: combinedDamage, color: '#DC2626', label: 'ВСЕ!' });
-      segments.push({ damage: Math.round(combinedDamage * 1.5), color: '#7F1D1D', label: 'КРИТ!' });
-    }
 
     return segments;
   }, [animatronicsAtDoors]);
@@ -754,16 +794,16 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
             <div className="bg-black/50 p-6 rounded-xl border border-white/20 mb-6">
               <div className="grid grid-cols-2 gap-4 text-left mb-4">
                 <div className="text-white/50">Время:</div>
-                <div className="text-blue-400 font-bold">{currentHour} AM <span className="text-red-400 text-sm">(-{(currentHour || 1) - 1 > 0 ? ((currentHour || 1) - 1) * 5 : 0}%)</span></div>
+                <div className="text-blue-400 font-bold">{currentHour} AM</div>
 
                 <div className="text-white/50">Батарея (модиф.):</div>
                 <div className={`font-bold ${(batteryLevel || 0) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                  {batteryLevel}% <span className="text-sm">({(batteryLevel || 0) >= 50 ? '+' : ''}{Math.round(((batteryLevel || 0) - 50) * 0.8)}%)</span>
+                  {batteryLevel}% <span className="text-sm">({(batteryLevel || 0) >= 50 ? '+' : ''}{Math.round(((batteryLevel || 0) - 50) * 0.4)}%)</span>
                 </div>
 
                 <div className="text-white/50">Аниматроники:</div>
                 <div className="text-red-400 font-bold">
-                  {animatronicsAtDoors.length} <span className="text-sm">(-{animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 4, 0)}%)</span>
+                  {animatronicsAtDoors.length} <span className="text-sm">(-{animatronicsAtDoors.reduce((sum, a) => sum + a.aiLevel * 3, 0)}%)</span>
                 </div>
               </div>
 
@@ -773,7 +813,7 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
                   {Math.round(calculateSurvivalChance())}%
                 </div>
                 <div className="text-xs text-white/30 mt-1">
-                  База 50% + модификаторы
+                  База 85% + модификаторы
                 </div>
               </div>
             </div>

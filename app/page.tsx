@@ -69,8 +69,8 @@ const DEFAULT_EQUIPMENT: Equipment = {
     type: 'backpack',
     name: 'Backpack',
     nameRu: 'Рюкзак',
-    slots: 8,
-    items: [null, null, null, null, null, null, null, null]  // ★ Пустой инвентарь
+    slots: 13,
+    items: [null, null, null, null, null, null, null, null, null, null, null, null, null]  // ★ 13 слотов: 2x2(4) + 2x2(4) + 2x1(2) + 1x1(3)
   }
 };
 
@@ -652,7 +652,7 @@ export default function GameBoard() {
               ДОСТУП ЗАБЛОКИРОВАН
             </h2>
             <p className="text-white/70 mb-6">
-              Для входа на точку S/F необходима <span className="text-yellow-400 font-bold">ключ-карта</span>.
+              Чтобы выбраться с локации через S/F необходима <span className="text-yellow-400 font-bold">ключ-карта</span>.
             </p>
             <p className="text-white/50 text-sm mb-6">
               Ключ-карту можно получить, успешно пройдя ночную смену в <span className="text-purple-400">Офисе (Y)</span>.
