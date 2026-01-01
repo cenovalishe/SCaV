@@ -22,6 +22,8 @@
 import React, { useState } from 'react';
 import { MAP_ROOMS, MAP_NODES_DATA, MAP_JOINTS, DANGER_COLORS, MapNodeData, ANIMATRONIC_SPAWNS } from '@/lib/mapData';
 import { movePlayer } from '@/app/actions/gameActions';
+// Импортируем данные о слотах игроков для получения цветов
+import { PLAYER_SLOTS } from './PlayerSelection';
 
 // Цвета для аниматроников
 const ANIMATRONIC_COLORS: Record<string, string> = {
@@ -32,10 +34,8 @@ const ANIMATRONIC_COLORS: Record<string, string> = {
   'default': '#EF4444'
 };
 
-// Цвета для игроков
-const PLAYER_COLORS = [
-  '#A855F7', '#22C55E', '#F97316', '#06B6D4', '#EC4899', '#84CC16',
-];
+// Удаляем старый массив PLAYER_COLORS, он больше не нужен
+
 
 interface GameMapProps {
   currentNodeId: string;
@@ -310,14 +310,19 @@ export default function GameMap({
               {/* Игроки (треугольники) */}
               {playersHere.map((p, idx) => {
                 const isCurrentPlayer = p.id === playerId;
-                const playerIndex = allPlayers.findIndex(ap => ap.id === p.id);
-                const playerColor = isCurrentPlayer ? PLAYER_COLORS[0] : PLAYER_COLORS[(playerIndex % (PLAYER_COLORS.length - 1)) + 1];
+                
+                // ★ ИЗМЕНЕНО: Находим данные слота по ID игрока для получения цвета
+                const playerSlot = PLAYER_SLOTS.find(slot => slot.id === p.id);
+                // Если слот найден, берем его цвет, иначе серый
+                const playerColor = playerSlot ? playerSlot.color : '#888888';
+
                 // Центр треугольника
                 const cx = node.pos[0] - 1.5 + idx * 2;
                 const cy = node.pos[1] + 3.5;
                 const size = 1.5;
                 // Точки треугольника (направлен вверх)
                 const points = `${cx},${cy - size} ${cx - size},${cy + size * 0.8} ${cx + size},${cy + size * 0.8}`;
+                
                 return (
                   <g key={p.id}>
                     <polygon
@@ -325,12 +330,13 @@ export default function GameMap({
                       fill={playerColor}
                       stroke={isCurrentPlayer ? "#fff" : "none"}
                       strokeWidth="0.3"
-                      filter={isCurrentPlayer ? "drop-shadow(0 0 3px rgba(168, 85, 247, 0.8))" : "none"}
+                      // Динамическая тень того же цвета, что и игрок
+                      filter={isCurrentPlayer ? `drop-shadow(0 0 3px ${playerColor})` : "none"}
                     />
                   </g>
                 );
               })}
-
+              
               {/* Враги */}
               {enemies.filter(e => e.currentNode === node.id).map((enemy, idx) => {
                 const enemyColor = ANIMATRONIC_COLORS[enemy.type?.toLowerCase()] || ANIMATRONIC_COLORS.default;
@@ -364,13 +370,15 @@ export default function GameMap({
         })}
       </svg>
 
-      {/* Легенда - стилизованная */}
+     {/* Легенда - стилизованная */}
       <div className="absolute bottom-2 left-2 z-10 bg-black/90 px-3 py-2 border border-white/20 rounded-lg backdrop-blur-sm">
         <div className="flex items-center gap-3 text-[9px] font-mono text-white/60 flex-wrap">
           <span className="flex items-center gap-1">
-            <svg width="10" height="10" viewBox="0 0 10 10" className="shadow-lg shadow-purple-500/50">
-              <polygon points="5,1 1,9 9,9" fill="#A855F7" />
-            </svg>вы
+            <svg width="10" height="10" viewBox="0 0 10 10" className="shadow-lg" style={{ boxShadow: `0 0 10px ${PLAYER_SLOTS.find(s => s.id === playerId)?.color || '#A855F7'}80` }}>
+              {/* Используем цвет текущего игрока или дефолтный фиолетовый */}
+              <polygon points="5,1 1,9 9,9" fill={PLAYER_SLOTS.find(s => s.id === playerId)?.color || '#A855F7'} />
+            </svg>
+            вы
           </span>
           <span className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-full bg-green-500" />путь
