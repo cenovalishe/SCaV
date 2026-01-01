@@ -101,7 +101,7 @@ export default function PlayerIndicators({
 
   return (
     // [FIX] Переместили позицию с bottom-20 на top-28, чтобы не перекрываться ActionPanel
-    <div className="absolute top-28 left-4 z-30">
+    <div className="absolute top-20 left-4 z-30">
       <div className="bg-black/80 border border-green-500/40 rounded-xl overflow-hidden min-w-[180px] backdrop-blur-sm">
         {/* Заголовок */}
         <div className="bg-green-900/60 px-4 py-2 border-b border-green-500/30">
