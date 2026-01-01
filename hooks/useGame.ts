@@ -64,7 +64,7 @@
 
 import { useState, useEffect } from 'react';
 import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebaseClient';
+import { dbClient } from '@/lib/firebaseClient';
 import { PlayerState, AnimatronicState, GlobalNightCycle } from '@/lib/types';
 import { NIGHT_CYCLE_TIMINGS, calculateNightAndHour } from '@/lib/nightCycleConfig';
 
