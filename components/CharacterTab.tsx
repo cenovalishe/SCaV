@@ -136,7 +136,7 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
 
         {/* Статы в одной колонке */}
         <div className="flex-1 flex flex-col gap-1.5 overflow-y-auto custom-scrollbar">
-          {(['attack', 'defense', 'speed', 'stealth', 'luck', 'capacity'] as const).map((statKey) => {
+          {(['attack', 'defense', 'speed', 'stealth', 'luck'] as const).map((statKey) => {
             const label = STAT_LABELS[statKey];
             const baseValue = stats[statKey];
             const effectiveValue = effectiveStats[statKey];
