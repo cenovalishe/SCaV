@@ -90,10 +90,10 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
 
   return (
     <div className="h-full flex p-2 gap-3">
-      {/* ЛЕВАЯ ЧАСТЬ - Аватар */}
-      <div className="w-[55%] flex flex-col">
-        {/* Аватар контейнер */}
-        <div className="relative w-full aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 mb-4 group">
+      {/* ЛЕВАЯ ЧАСТЬ - Аватар (сузили с 55% до 45%) */}
+      <div className="w-[45%] flex flex-col">
+        {/* Аватар контейнер - заменили aspect-square на aspect-[2/3] */}
+        <div className="relative w-full aspect-[2/3] bg-zinc-900 rounded-lg overflow-hidden border border-white/10 mb-4 group">
           
           {/* Изображение */}
           <Image 
