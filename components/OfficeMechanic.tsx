@@ -61,8 +61,10 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Доступные часы (исключая уже пройденные)
-  const availableHours = [1, 2, 3, 4, 5, 6].filter(h => !survivedHours.includes(h));
+  // Доступные часы (только часы БОЛЬШЕ максимального пройденного)
+  // Например: если выжили в 4 AM, то остаются только 5 AM и 6 AM
+  const maxSurvivedHour = survivedHours.length > 0 ? Math.max(...survivedHours) : 0;
+  const availableHours = [1, 2, 3, 4, 5, 6].filter(h => h > maxSurvivedHour);
 
   // Рисуем колесо для времени
   const drawTimeWheel = useCallback(() => {
@@ -466,6 +468,18 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
     setTimeout(() => {
       setIsSpinning(false);
       const count = targetIndex;
+
+      // Если 0 аниматроников - автоматическая победа в цикле!
+      if (count === 0) {
+        setAnimatronicsAtDoors([]);
+        // Добавляем текущий час в пройденные и переходим к результату
+        if (currentHour) {
+          setSurvivedHours(prev => [...prev, currentHour]);
+        }
+        setTimeout(() => setPhase('result'), 1500);
+        return;
+      }
+
       // Выбираем случайных аниматроников
       const shuffled = [...ANIMATRONIC_SPAWNS].sort(() => Math.random() - 0.5);
       const selected = shuffled.slice(0, count).map(a => ({
@@ -477,7 +491,7 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       setAnimatronicsAtDoors(selected);
       setTimeout(() => setPhase('survival_check'), 1500);
     }, 4000);
-  }, []);
+  }, [currentHour]);
 
   // Расчёт шанса выживания
   // ЗНАЧИТЕЛЬНО УВЕЛИЧЕН базовый шанс, время НЕ влияет
