@@ -176,8 +176,51 @@ export default function GameBoard() {
   // Хук игры
   const { player, allPlayers, enemies, loading } = useGame(GAME_ID, playerId || '');
 
+  // [FIX] Синхронизация PvP состояния для второго игрока
+  // Этот эффект автоматически открывает окно, когда сервер назначает игроку pvpState
+  useEffect(() => {
+    // 1. Базовые проверки: игрок загружен, список всех игроков есть
+    if (!player || !allPlayers.length) return;
+
+    // 2. Если окно PvP уже открыто локально, ничего не делаем
+    if (pvpEncounter?.active) return;
+
+    // 3. Проверяем, есть ли активная сессия в данных игрока с сервера
+    if (player.pvpState) {
+      const pvp = player.pvpState;
+
+      // Игнорируем, если статус уже 'completed' (чтобы не открывать старые окна при рефреше)
+      // Если нужно показывать результаты после рефреша, можно убрать проверку 'completed'
+      if (pvp.status === 'completed' && pvp.outcome === 'peaceful') return;
+
+      // 4. Определяем роль и находим оппонента
+      const isInitiator = player.id === pvp.initiatorId;
+      const opponentId = isInitiator ? pvp.targetId : pvp.initiatorId;
+      
+      const opponent = allPlayers.find(p => p.id === opponentId);
+
+      if (opponent) {
+        // 5. Открываем окно PvP
+        setPvpEncounter({
+          active: true,
+          otherPlayer: opponent,
+          isInitiator: isInitiator
+        });
+        
+        // Логируем событие (только для входящего вызова, чтобы не дублировать лог инициатора)
+        if (!isInitiator && pvp.status === 'pending') {
+           addLogEntry(`⚠️ ВАС АТАКУЕТ ${opponent.name || 'Unknown'}!`, 'pvp');
+        }
+      }
+    }
+  }, [player, allPlayers, pvpEncounter, addLogEntry]);
+
+  
+
+  
   const isCheckingTurn = useRef(false);
 
+  
   // Проверка одновременных ходов
   useEffect(() => {
     if (!playerId || loading || allPlayers.length === 0) return;
