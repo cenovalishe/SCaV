@@ -51,7 +51,12 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { PlayerState, GameLogEntry } from '@/lib/types';
+import { PlayerState, GameLogEntry, GlobalNightCycle } from '@/lib/types';
+import {
+  getAnimatronicAILevel,
+  calculateNightAndHour,
+  INITIAL_NIGHT_CYCLE
+} from '@/lib/nightCycleConfig';
 
 // /END_ANCHOR:GAMEACTIONS/IMPORTS
 
@@ -300,6 +305,25 @@ export async function movePlayer(
     const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
+    // ★ Получаем текущую ночь и час из глобального цикла
+    const gameDoc = await gameRef.get();
+    const gameData = gameDoc.data();
+    const nightCycle = (gameData?.globalNightCycle as GlobalNightCycle) || INITIAL_NIGHT_CYCLE;
+
+    // Вычисляем актуальные ночь и час на основе времени
+    let currentNight = nightCycle.currentNight;
+    let currentHour = nightCycle.currentHour;
+
+    if (nightCycle.isActive && nightCycle.startedAt) {
+      const now = Date.now();
+      const elapsedMs = now - nightCycle.startedAt;
+      const calculated = calculateNightAndHour(elapsedMs);
+      if (calculated) {
+        currentNight = calculated.night;
+        currentHour = calculated.hour;
+      }
+    }
+
     const enemyMoves = enemiesSnap.docs.map(async (enemyDoc) => {
       const enemyData = enemyDoc.data();
       const enemyId = enemyDoc.id as AnimatronicType;
@@ -308,9 +332,16 @@ export async function movePlayer(
       const animatronicData = ANIMATRONIC_SPAWNS.find(a => a.id === enemyId);
       if (!animatronicData) return Promise.resolve();
 
-      // FNAF1-style AI: random(1-20), если меньше aiLevel - двигаемся
-      // aiLevel от 0 (никогда не двигается) до 20 (всегда двигается)
-      const aiLevel = enemyData.aiLevel ?? animatronicData.aiLevel ?? 10;
+      // ★ FNAF1-style AI: получаем AI уровень из конфигурации ночей
+      // Если цикл неактивен, используем базовые значения
+      let aiLevel: number;
+      if (nightCycle.isActive) {
+        aiLevel = getAnimatronicAILevel(enemyId, currentNight, currentHour);
+      } else {
+        // Цикл неактивен - используем минимальный AI level
+        aiLevel = enemyData.aiLevel ?? animatronicData.aiLevel ?? 5;
+      }
+
       const aiRoll = Math.floor(Math.random() * 20) + 1; // 1-20
 
       if (aiRoll <= aiLevel) {
@@ -326,7 +357,11 @@ export async function movePlayer(
           // Если есть допустимые соседи, двигаемся в случайного из них
           if (validNeighbors.length > 0) {
             const nextNode = validNeighbors[Math.floor(Math.random() * validNeighbors.length)];
-            return enemyDoc.ref.update({ currentNode: nextNode });
+            // ★ Обновляем также текущий AI level в документе врага
+            return enemyDoc.ref.update({
+              currentNode: nextNode,
+              aiLevel: aiLevel
+            });
           }
         }
       }
@@ -959,7 +994,8 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
   }
 
   try {
-    const enemiesRef = dbAdmin.collection('games').doc(gameId).collection('enemies');
+    const gameRef = dbAdmin.collection('games').doc(gameId);
+    const enemiesRef = gameRef.collection('enemies');
     const enemiesSnap = await enemiesRef.get();
 
     // Если враги уже есть - ничего не делаем
@@ -967,10 +1003,33 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
       return { success: true, spawned: false, message: 'Enemies already exist' };
     }
 
+    // ★ Получаем текущую ночь и час из глобального цикла
+    const gameDoc = await gameRef.get();
+    const gameData = gameDoc.data();
+    const nightCycle = (gameData?.globalNightCycle as GlobalNightCycle) || INITIAL_NIGHT_CYCLE;
+
+    let currentNight = nightCycle.currentNight;
+    let currentHour = nightCycle.currentHour;
+
+    if (nightCycle.isActive && nightCycle.startedAt) {
+      const now = Date.now();
+      const elapsedMs = now - nightCycle.startedAt;
+      const calculated = calculateNightAndHour(elapsedMs);
+      if (calculated) {
+        currentNight = calculated.night;
+        currentHour = calculated.hour;
+      }
+    }
+
     // Создаем врагов используя данные из ANIMATRONIC_SPAWNS (бессмертные, без HP)
     const batch = dbAdmin.batch();
 
     for (const animatronic of ANIMATRONIC_SPAWNS) {
+      // ★ Получаем AI level из конфигурации ночей (или базовое значение если цикл неактивен)
+      const aiLevel = nightCycle.isActive
+        ? getAnimatronicAILevel(animatronic.id, currentNight, currentHour)
+        : animatronic.aiLevel;
+
       const docRef = enemiesRef.doc(animatronic.id);
       batch.set(docRef, {
         id: animatronic.id,
@@ -980,8 +1039,8 @@ export async function respawnEnemiesIfNeeded(gameId: string) {
         damage: 10,
         moveChance: 50,            // Устаревшее
         aggressionLevel: 1,
-        aiLevel: animatronic.aiLevel, // FNAF1-style AI level
-        difficulty: animatronic.difficulty, // Сложность уклонения
+        aiLevel: aiLevel,          // ★ AI level из глобального цикла
+        difficulty: animatronic.difficulty,
         color: animatronic.color
       });
     }

@@ -38,6 +38,8 @@ import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
 import OfficeMechanic from '@/components/OfficeMechanic';
 import PlayerInspectModal from '@/components/PlayerInspectModal';
+import NightCycleDisplay from '@/components/NightCycleDisplay';
+import { initializeNightCycle } from '@/app/actions/nightCycleActions';
 
 // Дефолтные значения (соответствуют начальным характеристикам в createPlayerInSlot)
 const DEFAULT_STATS: CharacterStats = {
@@ -141,6 +143,9 @@ export default function GameBoard() {
       // [PATCH] Автоматический респавн аниматроников если их нет
       await respawnEnemiesIfNeeded(GAME_ID);
 
+      // [PATCH] Инициализация глобального цикла ночей
+      await initializeNightCycle(GAME_ID);
+
       const savedId = localStorage.getItem('scav_player_id');
       const result = await getOrCreatePlayer(GAME_ID, savedId);
 
@@ -178,7 +183,15 @@ export default function GameBoard() {
   }, [addLogEntry]);
 
   // Хук игры
-  const { player, allPlayers, enemies, loading } = useGame(GAME_ID, playerId || '');
+  const {
+    player,
+    allPlayers,
+    enemies,
+    loading,
+    nightCycle,
+    calculatedNight,
+    calculatedHour
+  } = useGame(GAME_ID, playerId || '');
   
   const isCheckingTurn = useRef(false);
 
@@ -878,6 +891,18 @@ export default function GameBoard() {
         </div>
       </div>
 
+      {/* ★ Глобальный цикл ночей - плавающая панель */}
+      <div className="fixed top-4 right-4 w-80 z-30">
+        <NightCycleDisplay
+          gameId={GAME_ID}
+          nightCycle={nightCycle}
+          calculatedNight={calculatedNight}
+          calculatedHour={calculatedHour}
+          enemies={enemies}
+          isAdmin={playerId === 'player1'} // Первый игрок - админ
+        />
+      </div>
+
       {/* Нижняя панель статуса */}
       <div className="h-12 bg-gradient-to-r from-zinc-900 to-black border-t border-white/20 flex items-center justify-between px-6">
         <div className="flex items-center gap-8 font-mono text-xs">
@@ -908,6 +933,15 @@ export default function GameBoard() {
           </div>
         </div>
         <div className="flex items-center gap-6 font-mono text-xs">
+          {/* ★ Ночь и час из глобального цикла */}
+          {nightCycle.isActive && (
+            <>
+              <span className="text-purple-400">
+                🌙 Ночь {calculatedNight}/5 | {calculatedHour} AM
+              </span>
+              <span className="text-white/20">│</span>
+            </>
+          )}
           <span className="text-white/40">📍 {currentNodeData?.nameRu || player.currentNode}</span>
           <span className="text-white/20">│</span>
           <span className="flex items-center gap-2">

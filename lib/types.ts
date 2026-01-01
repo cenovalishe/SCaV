@@ -381,3 +381,52 @@ export interface CameraConfig {
 }
 
 // /END_ANCHOR:TYPES/CAMERA_SYSTEM
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// /START_ANCHOR:TYPES/GLOBAL_NIGHT_CYCLE
+// Глобальный цикл ночей - синхронизирован между всеми игроками
+// КОНТРАКТ:
+// - 10 реальных суток = 5 игровых ночей
+// - Каждые 2 суток = 1 ночь
+// - Каждые 8 часов = +1 AM (от 1 до 6)
+// - При достижении 6 AM → переход на следующую ночь, сброс до 1 AM
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface GlobalNightCycle {
+  isActive: boolean;              // Активен ли глобальный цикл (false = ожидание, true = идёт)
+  startedAt: number | null;       // Unix timestamp начала цикла (когда переключили с 0 на 1)
+  currentNight: number;           // Текущая ночь (1-5)
+  currentHour: number;            // Текущий час (1-6 AM)
+  timerEndAt: number | null;      // Unix timestamp окончания всего цикла
+  lastHourUpdateAt: number | null; // Unix timestamp последнего обновления часа
+  lastNightUpdateAt: number | null; // Unix timestamp последнего обновления ночи
+}
+
+// AI уровень аниматроника для конкретной ночи и часа
+export interface AnimatronicAIConfig {
+  animatronicId: string;          // ID аниматроника (freddy, bonnie, chica, foxy)
+  night: number;                   // Ночь (1-5)
+  hour: number;                    // Час (1-6)
+  aiLevel: number;                 // AI level (0-20, FNAF1 style)
+  isActive: boolean;               // Активен ли аниматроник на этой ночи/часе
+}
+
+// Конфигурация для всех аниматроников на конкретную ночь
+export interface NightConfig {
+  night: number;
+  animatronics: {
+    [animatronicId: string]: {
+      startHour: number;           // С какого часа активируется (0 = не появляется эту ночь)
+      aiLevelByHour: number[];     // AI level для каждого часа [1AM, 2AM, 3AM, 4AM, 5AM, 6AM]
+    }
+  }
+}
+
+// Тайминги глобального цикла (в миллисекундах)
+export interface NightCycleTimings {
+  totalDurationMs: number;         // Общая длительность цикла (10 суток)
+  nightDurationMs: number;         // Длительность одной ночи (2 суток)
+  hourDurationMs: number;          // Длительность одного часа (8 часов реального времени)
+}
+
+// /END_ANCHOR:TYPES/GLOBAL_NIGHT_CYCLE
