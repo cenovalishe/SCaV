@@ -506,7 +506,7 @@ export const ITEMS: Record<string, Item> = {
     value: 6000,
     width: 2, height: 2, size: 4, // 2x2
     icon: '🎒',
-    statModifiers: { capacity: 10, speed: -1 }
+    statModifiers: { speed: -1 }
   },
   lucky_charm: {
     id: 'lucky_charm',
@@ -686,7 +686,7 @@ export function calculateEffectiveStats(
  */
 export function getEquipmentModifiers(equipment: Equipment): Partial<CharacterStats> {
   const result = calculateEffectiveStats(
-    { attack: 0, defense: 0, speed: 0, stealth: 0, luck: 0, capacity: 0, hp: 0, maxHp: 0, stamina: 0, maxStamina: 0 },
+    { attack: 0, defense: 0, speed: 0, stealth: 0, luck: 0, hp: 0, maxHp: 0, stamina: 0, maxStamina: 0 },
     equipment
   );
   return result.modifiers;
