@@ -708,7 +708,8 @@ export default function GameBoard() {
         <PvPEncounter
           gameId={GAME_ID}
           currentPlayer={player}
-          otherPlayer={pvpEncounter.otherPlayer}
+          // [FIX] Передаем актуального противника из allPlayers для обновления UI в реальном времени
+          otherPlayer={allPlayers.find(p => p.id === pvpEncounter.otherPlayer.id) || pvpEncounter.otherPlayer}
           isInitiator={pvpEncounter.isInitiator}
           onComplete={handlePvPComplete}
         />
