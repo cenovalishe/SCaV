@@ -65,6 +65,7 @@ import {
   createPlayerInSlot, 
   respawnEnemiesIfNeeded, 
   handleAnimatronicDefeat,
+  givePlayerItem // <--- ДОБАВИТЬ ЭТОТ ИМПОРТ
   movePlayer 
 } from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
@@ -139,6 +140,40 @@ export default function GameBoard() {
 
   // ★ Найденный предмет (для анимации)
   const [foundItem, setFoundItem] = useState<{ icon: string; name: string } | null>(null);
+
+
+  const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
+    setOfficeMechanic(null);
+    
+    // 1. Обработка урона
+    if (result.damageReceived > 0) {
+      const damageResult = await applyDamage(GAME_ID, playerId!, result.damageReceived);
+      
+      if (damageResult.success) {
+         addLogEntry(`Получено урона: ${result.damageReceived}`, 'combat');
+         if (damageResult.isDefeated) {
+            addLogEntry('💀 Вы погибли от рук аниматроника в Офисе...', 'combat');
+            await handleAnimatronicDefeat(GAME_ID, playerId!);
+            return; 
+         }
+      }
+    }
+
+    // 2. Выдача карты
+    if (result.receivedKeyCard) {
+        // ★ ВЫЗОВ СЕРВЕРНОГО ДЕЙСТВИЯ
+        const giveResult = await givePlayerItem(GAME_ID, playerId!, 'key_card');
+        
+        if (giveResult.success) {
+          addLogEntry('🗝️ Ключ-карта получена и добавлена в инвентарь!', 'loot');
+        } else {
+          addLogEntry(`⚠️ Ошибка получения карты: ${giveResult.message}`, 'system');
+        }
+    } else if (!result.survived) { 
+        addLogEntry('Смена не пройдена...', 'system');
+    }
+  }, [playerId, addLogEntry]);
+  
 
   // ★ Лут рулетка
   const [lootRoulette, setLootRoulette] = useState<{ active: boolean; possibleItems: string[] } | null>(null);
