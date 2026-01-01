@@ -32,6 +32,7 @@ import TabbedPanel from '@/components/TabbedPanel';
 import GameMap from '@/components/GameMap';
 import CameraView from '@/components/CameraView';
 import EncounterSystem, { EncounterResult } from '@/components/EncounterSystem';
+import PvPEncounter, { PvPEncounterResult } from '@/components/PvPEncounter';
 import ActionPanel from '@/components/ActionPanel';
 import PlayerSelection from '@/components/PlayerSelection';
 import LootRoulette from '@/components/LootRoulette';
@@ -103,6 +104,13 @@ export default function GameBoard() {
     pendingMove: MapNodeData | null;
     staminaCost: number;
     previousNode: string | null;
+  } | null>(null);
+
+  // Состояние PvP встречи
+  const [pvpEncounter, setPvpEncounter] = useState<{
+    active: boolean;
+    otherPlayer: any;
+    isInitiator: boolean;
   } | null>(null);
 
   // Состояние лутинга
@@ -324,6 +332,17 @@ export default function GameBoard() {
           });
         }
 
+        // ★ Обработка PvP встречи
+        if (res.pvpEncounter?.hasEncounter && res.pvpEncounter.otherPlayers.length > 0) {
+          const otherPlayer = res.pvpEncounter.otherPlayers[0];
+          addLogEntry(`PvP встреча с ${otherPlayer.name}!`, 'pvp');
+          setPvpEncounter({
+            active: true,
+            otherPlayer: otherPlayer,
+            isInitiator: true // Текущий игрок инициирует PvP
+          });
+        }
+
         // ★ Запуск механики офиса при входе в ноду Y
         if (targetNodeId === 'Y') {
           addLogEntry('🏢 Вы вошли в офис охранника!', 'system');
@@ -388,6 +407,23 @@ export default function GameBoard() {
     await updateStamina(GAME_ID, playerId, -currentStamina);
     addLogEntry('Выносливость обнулена!', 'system');
   }, [playerId, currentStamina, addLogEntry]);
+
+  // Обработка результата PvP
+  const handlePvPComplete = useCallback(async (result: PvPEncounterResult) => {
+    if (!pvpEncounter) return;
+
+    if (result.outcome === 'peaceful') {
+      addLogEntry('PvP отклонен. Игроки разошлись мирно.', 'pvp');
+    } else if (result.outcome === 'retreat') {
+      addLogEntry(`Отступление после 3 раундов PvP`, 'pvp');
+    } else if (result.lootedItems && result.lootedItems.length > 0) {
+      addLogEntry(`PvP завершен! Получено предметов: ${result.lootedItems.join(', ')}`, 'pvp');
+    } else {
+      addLogEntry('PvP завершен', 'pvp');
+    }
+
+    setPvpEncounter(null);
+  }, [pvpEncounter, addLogEntry]);
 
   // ★ Обработчик завершения механики офиса
   const handleOfficeMechanicComplete = useCallback(async (result: { survived: boolean; receivedKeyCard: boolean; damageReceived: number }) => {
@@ -623,6 +659,17 @@ export default function GameBoard() {
           playerStealth={currentStealth}
           onComplete={handleEncounterComplete}
           onStaminaReset={handleStaminaReset}
+        />
+      )}
+
+      {/* Система PvP встречи */}
+      {pvpEncounter?.active && player && (
+        <PvPEncounter
+          gameId={GAME_ID}
+          currentPlayer={player}
+          otherPlayer={pvpEncounter.otherPlayer}
+          isInitiator={pvpEncounter.isInitiator}
+          onComplete={handlePvPComplete}
         />
       )}
 
