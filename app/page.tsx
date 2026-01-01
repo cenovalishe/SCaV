@@ -65,7 +65,7 @@ import {
   createPlayerInSlot, 
   respawnEnemiesIfNeeded, 
   handleAnimatronicDefeat,
-  givePlayerItem // <--- ДОБАВИТЬ ЭТОТ ИМПОРТ
+  givePlayerItem, // <--- ДОБАВИТЬ ЭТОТ ИМПОРТ
   movePlayer 
 } from '@/app/actions/gameActions';
 import { MapNodeData, getNodeById } from '@/lib/mapData';
