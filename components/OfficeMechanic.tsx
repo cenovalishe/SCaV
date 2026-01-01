@@ -403,8 +403,8 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
   // Начало механики
   const startOfficeMechanic = useCallback(() => {
     setPhase('time_wheel');
-    setTimeout(() => drawTimeWheel(), 100);
-  }, [drawTimeWheel]);
+    // Отрисовка происходит через useEffect
+  }, []);
 
   // Спин колеса времени
   const spinTimeWheel = useCallback(() => {
@@ -418,11 +418,11 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       } else {
         setTimeout(() => {
           setPhase('battery_wheel');
-          setTimeout(() => drawBatteryWheel(), 100);
+          // Отрисовка происходит через useEffect
         }, 1500);
       }
     });
-  }, [availableHours, spinWheel, drawBatteryWheel]);
+  }, [availableHours, spinWheel]);
 
   // Спин колеса батареи
   const spinBatteryWheel = useCallback(() => {
@@ -431,10 +431,10 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       setBatteryLevel(battery);
       setTimeout(() => {
         setPhase('animatronics_wheel');
-        setTimeout(() => drawAnimatronicsWheel(), 100);
+        // Отрисовка происходит через useEffect
       }, 1500);
     });
-  }, [spinWheel, drawAnimatronicsWheel]);
+  }, [spinWheel]);
 
   // Спин колеса аниматроников (ВЗВЕШЕННЫЙ)
   const spinAnimatronicsWheel = useCallback(() => {
@@ -538,12 +538,12 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       setTimeout(() => {
         setPhase('damage_wheel');
         setWheelRotation(0); // Сброс вращения для нового колеса
-        setTimeout(() => drawDamageWheel(), 100);
+        // Отрисовка происходит через useEffect
       }, 2000);
     }
 
     return survived;
-  }, [calculateSurvivalChance, currentHour, drawDamageWheel]);
+  }, [calculateSurvivalChance, currentHour]);
 
   // Построение массива сегментов урона (для расчёта результата спина)
   // ИНДИВИДУАЛЬНЫЕ числа 1-10, 11-20, и т.д. для каждого аниматроника
@@ -586,10 +586,10 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
         setAnimatronicsAtDoors([]);
         setWheelRotation(0);
         setCurrentWheelValue(null);
-        setTimeout(() => drawTimeWheel(), 100);
+        // Отрисовка происходит через useEffect
       }, 3000);
     });
-  }, [getDamageSegments, spinWheel, drawTimeWheel]);
+  }, [getDamageSegments, spinWheel]);
 
   // Продолжение после выживания
   const continueOffice = useCallback(() => {
@@ -603,9 +603,9 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       setBatteryLevel(null);
       setAnimatronicsAtDoors([]);
       setWheelRotation(0);
-      setTimeout(() => drawTimeWheel(), 100);
+      // Отрисовка происходит через useEffect
     }
-  }, [availableHours, currentHour, drawTimeWheel]);
+  }, [availableHours, currentHour]);
 
   // Завершение с победой
   const handleVictory = useCallback(() => {
@@ -624,6 +624,23 @@ export default function OfficeMechanic({ onComplete, onClose }: OfficeMechanicPr
       damageReceived: totalDamage
     });
   }, [totalDamage, onComplete]);
+
+  // ★ FIX: useEffect для корректной отрисовки колёс при смене фазы
+  // Это решает проблему устаревших замыканий в setTimeout
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (phase === 'time_wheel' && !isSpinning && currentHour === null) {
+        drawTimeWheel();
+      } else if (phase === 'battery_wheel' && !isSpinning && batteryLevel === null) {
+        drawBatteryWheel();
+      } else if (phase === 'animatronics_wheel' && !isSpinning && animatronicsAtDoors.length === 0) {
+        drawAnimatronicsWheel();
+      } else if (phase === 'damage_wheel' && !isSpinning && currentWheelValue === null) {
+        drawDamageWheel();
+      }
+    }, 50);
+    return () => clearTimeout(timer);
+  }, [phase, isSpinning, currentHour, batteryLevel, animatronicsAtDoors.length, currentWheelValue, drawTimeWheel, drawBatteryWheel, drawAnimatronicsWheel, drawDamageWheel]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/98">
