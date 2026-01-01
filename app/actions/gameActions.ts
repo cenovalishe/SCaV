@@ -281,16 +281,17 @@ export async function movePlayer(
     }
 
     // 1. Сначала перемещаем игрока и сбрасываем боевые статусы
+    // ★ FIX: Firebase не позволяет undefined - используем null
     await playerRef.update({
       currentNode: targetNodeId,
       status: "IDLE", // Сбрасываем статус, проверка боя будет позже
       currentEnemyId: null, // Сбрасываем текущего врага
-      chosenBranch: newChosenBranch,
+      chosenBranch: newChosenBranch ?? null,
       hasReachedY: hasReachedY,
       hasLeftSF: hasLeftSF, // FIX: Флаг выхода из SF
       visitedNodes: updatedVisitedNodes,
-      lastDirection: lastDirection,    // ★ Направление прихода в Y
-      enteredXFrom: enteredXFrom,      // ★ Откуда пришли в X
+      lastDirection: lastDirection ?? null,    // ★ Направление прихода в Y
+      enteredXFrom: enteredXFrom ?? null,      // ★ Откуда пришли в X
       lastUpdated: FieldValue.serverTimestamp()
     });
 
