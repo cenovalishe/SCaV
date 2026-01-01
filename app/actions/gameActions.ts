@@ -677,6 +677,10 @@ export async function lootLocation(gameId: string, playerId: string) {
     const playerData = playerSnap.data();
     const currentNode = playerData?.currentNode;
     const currentStamina = playerData?.stats?.stamina || 0;
+    
+    // ★ ИЗМЕНЕНО: Получаем значение удачи (по умолчанию 0)
+    const currentLuck = playerData?.stats?.luck || 0;
+
     const equipment = playerData?.equipment || {
       pockets: [null, null, null, null],
       specials: [null, null, null],
@@ -697,7 +701,13 @@ export async function lootLocation(gameId: string, playerId: string) {
     const foundItems: string[] = [];
     for (const lootEntry of nodeData.possibleLoot) {
       const roll = Math.random() * 100;
-      if (roll <= lootEntry.chance) {
+      
+      // ★ РЕАЛИЗАЦИЯ УДАЧИ:
+      // Каждая единица удачи увеличивает шанс найти предмет на 1%
+      // Например, если шанс 20% и удача 5, итоговый шанс будет 25%
+      const luckModifier = currentLuck * 1.0; 
+      
+      if (roll <= (lootEntry.chance + luckModifier)) {
         const count = Math.floor(Math.random() * (lootEntry.maxCount - lootEntry.minCount + 1)) + lootEntry.minCount;
         for (let i = 0; i < count; i++) {
           foundItems.push(lootEntry.itemId);
