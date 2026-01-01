@@ -363,7 +363,7 @@ export const ROOM_IMAGES: Record<string, string> = {
   'R_STAGE': '/cameras/cam_stage.jpg',
   'R_BACK': '/cameras/cam_backstage.jpg',
   'R_COVE': '/cameras/cam_cove.jpg',
-  'R_KITCH': 'https://static.wikia.nocookie.net/freddy-fazbears-pizza/images/d/d3/Kitchen.jpg/revision/latest?cb=20140825003350',
+  'R_KITCH': '/cameras/cam_kitchen.jpg',
   'R_WEST': '/cameras/cam_westhall.jpg',
   'R_EAST': '/cameras/cam_easthall.jpg',
   'R_OFFICE': '/cameras/cam_office.jpg',
