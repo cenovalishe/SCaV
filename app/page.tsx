@@ -290,6 +290,13 @@ export default function GameBoard() {
     }
   }, [playerId, loading, allPlayers, addLogEntry]);
 
+  // ★ Синхронизация equipment из Firebase (player.equipment)
+  useEffect(() => {
+    if (player && (player as any).equipment) {
+      setEquipment((player as any).equipment);
+    }
+  }, [player]);
+
   // Данные текущего узла
   const currentNodeData = player ? (getNodeById(player.currentNode) ?? null) : null;
 
@@ -606,9 +613,13 @@ export default function GameBoard() {
     await updateStamina(GAME_ID, playerId, -currentStamina);
   }, [playerId, currentStamina, addLogEntry]);
 
-  const handleEquipmentChange = useCallback((newEquipment: Equipment) => {
+  const handleEquipmentChange = useCallback(async (newEquipment: Equipment) => {
     setEquipment(newEquipment);
-  }, []);
+    // Сохраняем в Firebase
+    if (playerId) {
+      await updateEquipment(GAME_ID, playerId, newEquipment);
+    }
+  }, [playerId]);
 
   // Экран выбора игрока и загрузки
   if (needsSlotSelection) {
