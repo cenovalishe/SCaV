@@ -48,14 +48,10 @@ interface SlotConfig {
   subCellsCount?: number;
 }
 
-// Конфигурация слотов рюкзака: два слота 2x2, один 2x1, три 1x1
+// Конфигурация слотов рюкзака: один 2x2 и один 2x1 (компактнее)
 const BACKPACK_SLOTS: SlotConfig[] = [
   { size: '2x2', index: 0, subCellsCount: 4 },
-  { size: '2x2', index: 1, subCellsCount: 4 },
-  { size: '2x1', index: 2, subCellsCount: 2 },
-  { size: '1x1', index: 3 },
-  { size: '1x1', index: 4 },
-  { size: '1x1', index: 5 },
+  { size: '2x1', index: 1, subCellsCount: 2 },
 ];
 
 // Конфигурация слотов разгрузки/сумки: один слот 2x2
@@ -67,8 +63,8 @@ const BAG_SLOTS: SlotConfig[] = [
   { size: '2x2', index: 0, subCellsCount: 4 },
 ];
 
-// Базовый размер единичного слота
-const SLOT_BASE_SIZE = 44; // px
+// Базовый размер единичного слота (увеличен для лучшей видимости)
+const SLOT_BASE_SIZE = 52; // px (было 44)
 const SLOT_GAP = 2; // px
 
 // ════════════════════════════════════════════════════════════════════════════════
@@ -985,7 +981,7 @@ export default function InventoryTab({
             ))}
           </div>
 
-          {/* Шлем, Броня, Одежда (вертикально) */}
+          {/* Шлем и Броня */}
           <CompactEquipmentSlot
             label="ШЛЕМ"
             slotType="helmet"
@@ -1008,18 +1004,6 @@ export default function InventoryTab({
             onClick={(e) => equipment.armor && handleItemClick(e, equipment.armor, 'armor')}
             isDragOver={dragOverTarget?.type === 'armor'}
             isInvalidDrop={dragOverTarget?.type === 'armor' && invalidDropTarget}
-          />
-
-          <CompactEquipmentSlot
-            label="ОДЕЖ"
-            slotType="clothes"
-            itemId={equipment.clothes}
-            onDragStart={(e) => equipment.clothes && handleDragStart(e, equipment.clothes, 'clothes')}
-            onDragOver={(e) => handleDragOver(e, 'clothes')}
-            onDrop={(e) => handleDrop(e, 'clothes')}
-            onClick={(e) => equipment.clothes && handleItemClick(e, equipment.clothes, 'clothes')}
-            isDragOver={dragOverTarget?.type === 'clothes'}
-            isInvalidDrop={dragOverTarget?.type === 'clothes' && invalidDropTarget}
           />
 
           {/* Карманы (2x2 сетка) */}
@@ -1179,7 +1163,8 @@ export default function InventoryTab({
                   }
                   // Слот 2x1
                   if (slot.subCellsCount === 2) {
-                    const baseIdx = 8;
+                    // После 2x2 (4 ячейки), 2x1 начинается с индекса 4
+                    const baseIdx = 4;
                     const subCellItems = equipment.backpack?.items.slice(baseIdx, baseIdx + 2) || [null, null];
                     return (
                       <SubCellSlot2x1
@@ -1196,21 +1181,7 @@ export default function InventoryTab({
                       />
                     );
                   }
-                  // Слоты 1x1
-                  const realIndex = 10 + (slot.index - 3);
-                  return (
-                    <SubCell
-                      key={slot.index}
-                      itemId={equipment.backpack?.items[realIndex] || null}
-                      color="orange"
-                      onDragStart={(e) => equipment.backpack?.items[realIndex] && handleDragStart(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
-                      onDragOver={(e) => handleDragOver(e, 'backpack', realIndex)}
-                      onDrop={(e) => handleDrop(e, 'backpack', realIndex)}
-                      onClick={(e) => equipment.backpack?.items[realIndex] && handleItemClick(e, equipment.backpack.items[realIndex]!, 'backpack', realIndex)}
-                      isDragOver={dragOverTarget?.type === 'backpack' && dragOverTarget?.index === realIndex}
-                      isInvalid={invalidDropTarget}
-                    />
-                  );
+                  return null;
                 })}
               </div>
             </div>

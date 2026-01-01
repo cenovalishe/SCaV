@@ -499,6 +499,25 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         luck: 0,         // Удача: 0
         maxHp: 100,      // Максимальное ХП
       },
+      // ★ FIX: Добавляем экипировку по умолчанию с рюкзаком
+      equipment: {
+        helmet: null,
+        armor: null,
+        pockets: [null, null, null, null],
+        specials: [null, null, null],
+        weapon: null,
+        modules: [null, null, null],
+        rig: null,
+        bag: null,
+        backpack: {
+          id: 'bp_default',
+          type: 'backpack',
+          name: 'Backpack',
+          nameRu: 'Рюкзак',
+          slots: 6,
+          items: [null, null, null, null, null, null]
+        }
+      },
       inventory: [],     // Пустой инвентарь
       chosenBranch: null,
       hasReachedY: false,
@@ -722,12 +741,24 @@ export async function lootLocation(gameId: string, playerId: string) {
     // ★ ИЗМЕНЕНО: Получаем значение удачи (по умолчанию 0)
     const currentLuck = playerData?.stats?.luck || 0;
 
+    // ★ FIX: Добавляем рюкзак по умолчанию в fallback
     const equipment = playerData?.equipment || {
+      helmet: null,
+      armor: null,
       pockets: [null, null, null, null],
       specials: [null, null, null],
+      weapon: null,
+      modules: [null, null, null],
       rig: null,
       bag: null,
-      backpack: null
+      backpack: {
+        id: 'bp_default',
+        type: 'backpack',
+        name: 'Backpack',
+        nameRu: 'Рюкзак',
+        slots: 6,
+        items: [null, null, null, null, null, null]
+      }
     };
 
     if (currentStamina < 1) {

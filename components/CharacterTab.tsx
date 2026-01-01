@@ -74,7 +74,7 @@ const DEFAULT_AVATAR = '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg';
 export default function CharacterTab({ stats, playerName, equipment }: CharacterTabProps) {
   // Расчёт эффективных статов с учётом экипировки
   const defaultEquipment: Equipment = {
-    helmet: null, armor: null, clothes: null,
+    helmet: null, armor: null,
     pockets: [null, null, null, null],
     specials: [null, null, null],
     weapon: null,

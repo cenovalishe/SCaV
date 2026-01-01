@@ -488,7 +488,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Sneakers',
     nameRu: 'Кроссовки',
     type: 'equipment',
-    subType: 'clothes',
+    subType: 'any',
     value: 3000,
     width: 1, height: 1, size: 1, // 1x1
     icon: '👟',
@@ -499,7 +499,7 @@ export const ITEMS: Record<string, Item> = {
     name: 'Tactical Gloves',
     nameRu: 'Тактические перчатки',
     type: 'equipment',
-    subType: 'clothes',
+    subType: 'any',
     value: 2500,
     width: 1, height: 1, size: 1, // 1x1
     icon: '🧤',
@@ -655,10 +655,9 @@ export function calculateEffectiveStats(
     }
   };
 
-  // Слоты экипировки (шлем, броня, одежда, оружие и модули)
+  // Слоты экипировки (шлем, броня, оружие и модули)
   addModifiersFromItem(equipment.helmet);
   addModifiersFromItem(equipment.armor);
-  addModifiersFromItem(equipment.clothes);
   addModifiersFromItem(equipment.weapon);
 
   // Модули (3 слота)

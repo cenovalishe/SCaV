@@ -103,7 +103,6 @@ const DEFAULT_STATS: CharacterStats = {
 const DEFAULT_EQUIPMENT: Equipment = {
   helmet: null,
   armor: null,
-  clothes: null,
   pockets: [null, null, null, null],
   specials: [null, null, null],
   weapon: null,
@@ -115,8 +114,8 @@ const DEFAULT_EQUIPMENT: Equipment = {
     type: 'backpack',
     name: 'Backpack',
     nameRu: 'Рюкзак',
-    slots: 13,
-    items: [null, null, null, null, null, null, null, null, null, null, null, null, null]
+    slots: 6,
+    items: [null, null, null, null, null, null]
   }
 };
 

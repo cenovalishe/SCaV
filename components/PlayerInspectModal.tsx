@@ -354,10 +354,9 @@ function InventoryTabReadOnly({ equipment }: { equipment: Equipment }) {
             ))}
           </div>
 
-          {/* Шлем, Броня, Одежда */}
+          {/* Шлем и Броня */}
           <ItemSlotReadOnly itemId={equipment.helmet} />
           <ItemSlotReadOnly itemId={equipment.armor} />
-          <ItemSlotReadOnly itemId={equipment.clothes} />
 
           {/* Карманы */}
           <div className="grid grid-cols-2 gap-1">
@@ -487,7 +486,6 @@ export default function PlayerInspectModal({ player, onClose }: PlayerInspectMod
   const equipment: Equipment = player.equipment || {
     helmet: null,
     armor: null,
-    clothes: null,
     pockets: [null, null, null, null],
     specials: [null, null, null],
     weapon: null,
