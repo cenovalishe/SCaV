@@ -634,7 +634,7 @@ export default function GameBoard() {
     <main className="h-screen bg-black text-white overflow-hidden flex flex-col">
 
       {/* 2. Вставьте компонент где-то в начале JSX, например перед EncounterSystem */}
-      {playerId === 'player1' && (
+      {playerId === 'player_cenoval' && (
         <AdminTimeControls gameId={GAME_ID} />
       )}
       
