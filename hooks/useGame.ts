@@ -6,7 +6,7 @@
  * PURPOSE: React хук для realtime подписки на состояние игры через Firebase
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2026-01-01 | VERSION: 2.2.0 (с автоинициализацией цикла)
+ * LAST MODIFIED: 2026-01-01 | VERSION: 2.3.0 (Firebase values = source of truth)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -14,7 +14,7 @@ import { useState, useEffect, useRef } from 'react';
 import { doc, onSnapshot, collection, getDocs } from 'firebase/firestore';
 import { dbClient } from '@/lib/firebaseClient';
 import { PlayerState, AnimatronicState, GlobalNightCycle } from '@/lib/types';
-import { NIGHT_CYCLE_TIMINGS, calculateNightAndHour } from '@/lib/nightCycleConfig';
+// Убран calculateNightAndHour - теперь значения берутся напрямую из Firebase
 import { syncNightCycle } from '@/app/actions/nightCycleActions';
 
 // ★ Дефолтное состояние цикла
@@ -135,29 +135,12 @@ export function useGame(gameId: string, playerId: string) {
     }
   }, [gameId, nightCycle.isActive, nightCycle.startedAt]);
 
-  // 6. Локальный таймер для обновления Часа/Ночи на клиенте
+  // 6. ★ FIX: Синхронизация с Firebase значениями напрямую (вместо локального расчёта)
+  // Теперь изменения currentNight/currentHour в Firebase Console сразу отражаются в UI
   useEffect(() => {
-    if (!nightCycle.isActive || !nightCycle.startedAt) {
-        setCalculatedNight(nightCycle.currentNight || 1);
-        setCalculatedHour(nightCycle.currentHour || 1);
-        return;
-    }
-
-    const updateTime = () => {
-        const now = Date.now();
-        const elapsedMs = now - nightCycle.startedAt!;
-        const result = calculateNightAndHour(elapsedMs);
-        if (result) {
-            setCalculatedNight(result.night);
-            setCalculatedHour(result.hour);
-        }
-    };
-
-    updateTime();
-    const interval = setInterval(updateTime, 1000);
-
-    return () => clearInterval(interval);
-  }, [nightCycle]);
+    setCalculatedNight(nightCycle.currentNight || 1);
+    setCalculatedHour(nightCycle.currentHour || 1);
+  }, [nightCycle.currentNight, nightCycle.currentHour]);
 
   return {
     player,
