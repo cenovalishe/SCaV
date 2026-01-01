@@ -51,12 +51,14 @@ import { dbAdmin } from '@/lib/firebaseAdmin';
 import { MAP_NODES_DATA, ANIMATRONIC_SPAWNS, AnimatronicType } from '@/lib/mapData';
 import { revalidatePath } from 'next/cache';
 import { FieldValue } from 'firebase-admin/firestore';
-import { PlayerState, GameLogEntry, GlobalNightCycle } from '@/lib/types';
+// ★ ИСПРАВЛЕНИЕ: Добавлен импорт Equipment
+import { PlayerState, GameLogEntry, GlobalNightCycle, Equipment } from '@/lib/types';
 import {
   getAnimatronicAILevel,
   calculateNightAndHour,
   INITIAL_NIGHT_CYCLE
 } from '@/lib/nightCycleConfig';
+
 
 // /END_ANCHOR:GAMEACTIONS/IMPORTS
 
