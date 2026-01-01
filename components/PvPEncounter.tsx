@@ -92,7 +92,8 @@ export default function PvPEncounter({
       pvpState.defenderId
     );
 
-    if (result.success && result.combatLog) {
+    // [FIX] Используем 'in' для проверки наличия свойства combatLog
+    if (result.success && 'combatLog' in result) {
       setCombatLog(result.combatLog);
 
       // Проверка на победу
