@@ -15,6 +15,13 @@
  * │ - Поддержка переключения на любую ноду                                     │
  * └─────────────────────────────────────────────────────────────────────────────┘
  *
+ * ┌─────────────────────────────────────────────────────────────────────────────┐
+ * │ CHANGES v2.1                                                                │
+ * ├─────────────────────────────────────────────────────────────────────────────┤
+ * │ - Добавлена кнопка Night Cycle в верхний хедер камеры                      │
+ * │ - Добавлена логика модального окна для просмотра детальной инфо о ночи     │
+ * └─────────────────────────────────────────────────────────────────────────────┘
+ *
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -22,19 +29,27 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MapNodeData, ROOM_IMAGES, getRoomByNodeId } from '@/lib/mapData';
-import { PlayerState } from '@/lib/types';
+import { GlobalNightCycle, PlayerState, AnimatronicState } from '@/lib/types';
 import Image from 'next/image';
 import PlayerIndicators from './PlayerIndicators';
+import NightCycleDisplay from './NightCycleDisplay';
 
 interface CameraViewProps {
   currentNode: MapNodeData | null;
-  viewingNode?: MapNodeData | null; // ★ Нода, которую СМОТРИМ (может отличаться от текущей позиции)
+  viewingNode?: MapNodeData | null;
   nodeId: string;
   enemiesHere: { id: string; name: string; type: string }[];
   playersHere: { id: string; name: string; isCurrentPlayer: boolean; playerData?: PlayerState }[];
-  // ★ Новые пропсы для интерактивности
   onAttackPlayer?: (targetPlayer: PlayerState) => void;
   onInspectPlayer?: (targetPlayer: PlayerState) => void;
+  
+  // ★ Новые пропсы для Глобального Цикла
+  nightCycle?: GlobalNightCycle;
+  calculatedNight?: number;
+  calculatedHour?: number;
+  enemies?: AnimatronicState[]; // Полный список для NightCycleDisplay
+  gameId?: string;
+  isAdmin?: boolean;
 }
 
 export default function CameraView({
@@ -44,17 +59,27 @@ export default function CameraView({
   enemiesHere,
   playersHere,
   onAttackPlayer,
-  onInspectPlayer
+  onInspectPlayer,
+  nightCycle,
+  calculatedNight,
+  calculatedHour,
+  enemies,
+  gameId,
+  isAdmin
 }: CameraViewProps) {
   // Используем viewingNode если передан, иначе текущую ноду
   const displayNode = viewingNode || currentNode;
   const displayNodeId = viewingNode?.id || nodeId;
   const room = getRoomByNodeId(displayNodeId);
 
-  // Состояния для эффектов
+  // Состояния
   const [isSwitching, setIsSwitching] = useState(false);
   const [glitchIntensity, setGlitchIntensity] = useState(0);
   const [currentTime, setCurrentTime] = useState(new Date());
+  
+  // ★ Состояние для открытия меню ночи
+  const [showNightInfo, setShowNightInfo] = useState(false);
+  
   const prevNodeIdRef = useRef(displayNodeId);
 
   // Эффект переключения камеры
@@ -63,7 +88,6 @@ export default function CameraView({
       setIsSwitching(true);
       setGlitchIntensity(1);
 
-      // Уменьшаем глитч постепенно
       const glitchTimer = setTimeout(() => setGlitchIntensity(0.5), 100);
       const glitchTimer2 = setTimeout(() => setGlitchIntensity(0.2), 200);
       const timer = setTimeout(() => {
@@ -88,16 +112,14 @@ export default function CameraView({
     return () => clearInterval(interval);
   }, []);
 
-  // Изображение комнаты
   const imageSrc = room && ROOM_IMAGES[room.id]
     ? ROOM_IMAGES[room.id]
     : '/images/static.jpg';
 
-  // Проверяем, смотрим ли мы на другую ноду
   const isRemoteViewing = viewingNode && viewingNode.id !== currentNode?.id;
 
   return (
-    <div className="relative w-full h-full bg-black overflow-hidden border-2 border-zinc-800 rounded-lg shadow-2xl">
+    <div className="relative w-full h-full bg-black overflow-hidden border-2 border-zinc-800 rounded-lg shadow-2xl group">
 
       {/* Основной контент камеры */}
       <div
@@ -106,7 +128,6 @@ export default function CameraView({
           transform: glitchIntensity > 0 ? `translateX(${(Math.random() - 0.5) * glitchIntensity * 10}px)` : 'none'
         }}
       >
-        {/* Фоновое изображение */}
         {room && (
           <Image
             src={imageSrc}
@@ -118,7 +139,6 @@ export default function CameraView({
           />
         )}
 
-        {/* Если нет сигнала */}
         {!room && (
           <div className="absolute inset-0 flex items-center justify-center bg-zinc-900">
             <div className="text-center">
@@ -127,13 +147,11 @@ export default function CameraView({
             </div>
           </div>
         )}
-
-        {/* Силуэты врагов - ОТКЛЮЧЕНО */}
       </div>
 
-      {/* ═══ ИНДИКАТОРЫ ВРАГОВ (УЛУЧШЕННЫЕ) ═══ */}
-      {enemiesHere.length > 0 && (
-        <div className="absolute top-16 left-1/2 -translate-x-1/2 z-30">
+      {/* ═══ ИНДИКАТОРЫ ВРАГОВ ═══ */}
+      {!showNightInfo && enemiesHere.length > 0 && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-30 w-full max-w-md px-4">
           {enemiesHere.map((enemy) => {
             // Цвета по типам аниматроников
             const enemyColors: Record<string, { bg: string; border: string; glow: string; icon: string }> = {
@@ -197,8 +215,8 @@ export default function CameraView({
         </div>
       )}
 
-      {/* ═══ СПИСОК ИГРОКОВ (с интерактивным меню) ═══ */}
-      {playersHere.length > 0 && onAttackPlayer && onInspectPlayer && (
+{/* ═══ СПИСОК ИГРОКОВ ═══ */}
+      {!showNightInfo && playersHere.length > 0 && onAttackPlayer && onInspectPlayer && (
         <PlayerIndicators
           players={playersHere}
           currentNodeId={displayNodeId}
@@ -209,12 +227,9 @@ export default function CameraView({
       )}
 
       {/* ═══ ЭФФЕКТЫ КАМЕРЫ ═══ */}
-
-      {/* Шум при переключении */}
       {isSwitching && (
         <>
           <div className="static-overlay mix-blend-hard-light" />
-          {/* Глитч-линии */}
           <div className="absolute inset-0 z-40 pointer-events-none overflow-hidden">
             {Array(5).fill(0).map((_, i) => (
               <div
@@ -230,107 +245,109 @@ export default function CameraView({
         </>
       )}
 
-      {/* Постоянные CRT эффекты */}
       <div className="scanlines mix-blend-overlay opacity-40" />
       <div className="vignette" />
-
-      {/* Мерцание CRT */}
       <div className="absolute inset-0 pointer-events-none crt-flicker" />
 
-      {/* ═══ UI КАМЕРЫ ═══ */}
-
-      {/* Заголовок камеры */}
-      <div className="absolute top-0 left-0 right-0 z-20 p-4">
-        <div className="flex items-center justify-between">
-          {/* REC индикатор */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded-full bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
-              <span className="font-mono text-red-500 text-lg font-bold tracking-[0.3em] drop-shadow-lg">
-                REC
-              </span>
-            </div>
-            {isRemoteViewing && (
-              <div className="px-2 py-1 bg-blue-900/60 border border-blue-500/50 rounded text-blue-400 font-mono text-xs">
-                УДАЛЁННЫЙ ПРОСМОТР
+      {/* ═══ UI КАМЕРЫ (ХЕДЕР) ═══ */}
+      <div className="absolute top-0 left-0 right-0 z-40 p-4 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="flex items-start justify-between">
+          
+          {/* СЛЕВА: REC + Режим */}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="w-4 h-4 rounded-full bg-red-600 animate-pulse shadow-[0_0_15px_rgba(220,38,38,0.8)]" />
+                <span className="font-mono text-red-500 text-lg font-bold tracking-[0.3em] drop-shadow-lg">
+                  REC
+                </span>
               </div>
-            )}
+            </div>
+             {isRemoteViewing && (
+                <div className="mt-1 px-2 py-0.5 bg-blue-900/60 border border-blue-500/50 rounded text-blue-400 font-mono text-[10px] w-fit">
+                  УДАЛЁННЫЙ ПРОСМОТР
+                </div>
+              )}
           </div>
 
-          {/* Время */}
-          <div className="text-right">
-            <div className="font-mono text-white/90 text-lg tracking-wider drop-shadow-lg">
-              {currentTime.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-            </div>
-            <div className="font-mono text-white/50 text-xs">
-              {currentTime.toLocaleDateString('ru-RU')}
-            </div>
-          </div>
+          {/* ★ ЦЕНТР (или СПРАВА): КНОПКА НОЧНОГО ЦИКЛА ★ */}
+          {nightCycle && (
+            <button 
+                onClick={() => setShowNightInfo(true)}
+                className="group flex flex-col items-end cursor-pointer hover:bg-white/5 p-2 rounded-lg transition-all border border-transparent hover:border-white/10"
+            >
+                <div className="flex items-center gap-2">
+                    <span className="text-xl group-hover:animate-pulse">🌙</span>
+                    <span className="font-mono text-white text-xl font-bold tracking-widest drop-shadow-[0_0_5px_rgba(255,255,255,0.5)]">
+                        {nightCycle.isActive ? `${calculatedHour} AM` : 'OFFLINE'}
+                    </span>
+                </div>
+                {nightCycle.isActive && (
+                    <div className="text-[10px] font-mono text-purple-400 tracking-[0.2em] group-hover:text-purple-300">
+                        NIGHT {calculatedNight} • OPEN INFO
+                    </div>
+                )}
+            </button>
+          )}
+
         </div>
 
-        {/* Название камеры */}
-        <div className="mt-3 flex items-center gap-3">
-          <div className="font-mono text-white text-2xl font-bold tracking-wider drop-shadow-lg">
-            CAM-{displayNode?.id || '??'}
-          </div>
-          <div className="px-3 py-1 bg-white/10 border border-white/20 rounded-lg">
-            <span className="font-mono text-white/80 text-sm uppercase">
-              {displayNode?.nameRu || 'OFFLINE'}
-            </span>
-          </div>
-        </div>
-
-        {/* ★ Инфо для специальных локаций */}
-        {displayNode?.id === 'SF' && (
-          <div className="mt-3 bg-gradient-to-r from-yellow-900/80 to-orange-900/60 border border-yellow-500/50 rounded-lg p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">🔐</span>
-              <span className="font-mono text-yellow-400 text-sm font-bold uppercase tracking-wider">
-                ТРЕБУЕТСЯ КЛЮЧ-КАРТА
-              </span>
+        {/* Название камеры (чуть ниже) */}
+        {!showNightInfo && (
+            <div className="mt-2 flex items-center gap-3">
+            <div className="font-mono text-white text-2xl font-bold tracking-wider drop-shadow-lg">
+                CAM-{displayNode?.id || '??'}
             </div>
-            <div className="font-mono text-white/60 text-xs leading-relaxed">
-              Для побега необходима ключ-карта из <span className="text-purple-400">Офиса (Y)</span>
+            <div className="px-3 py-1 bg-white/10 border border-white/20 rounded-lg">
+                <span className="font-mono text-white/80 text-sm uppercase">
+                {displayNode?.nameRu || 'OFFLINE'}
+                </span>
             </div>
-          </div>
-        )}
-
-        {displayNode?.id === 'Y' && (
-          <div className="mt-3 bg-gradient-to-r from-purple-900/80 to-indigo-900/60 border border-purple-500/50 rounded-lg p-3 backdrop-blur-sm">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xl">🏢</span>
-              <span className="font-mono text-purple-400 text-sm font-bold uppercase tracking-wider">
-                ОФИС ОХРАННИКА
-              </span>
             </div>
-            <div className="font-mono text-white/60 text-xs leading-relaxed">
-              Пройдите ночную смену, чтобы получить <span className="text-yellow-400">ключ-карту</span>
-            </div>
-          </div>
         )}
       </div>
 
-      {/* Футер камеры */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 p-4">
-        <div className="flex items-end justify-between">
-          <div className="font-mono text-white/40 text-xs">
-            {room?.label || 'Unknown Location'}
-          </div>
-          <div className="flex items-center gap-4 text-right">
+      {/* ═══ UI КАМЕРЫ (ФУТЕР) ═══ */}
+      {!showNightInfo && (
+        <div className="absolute bottom-0 left-0 right-0 z-20 p-4 bg-gradient-to-t from-black/80 to-transparent">
+            <div className="flex items-end justify-between">
             <div className="font-mono text-white/40 text-xs">
-              <span className="text-green-400">●</span> 60 FPS
+                {room?.label || 'Unknown Location'}
             </div>
-            <div className="font-mono text-white/40 text-xs">
-              1080p HD
+            <div className="flex items-center gap-4 text-right">
+                <div className="font-mono text-white/40 text-xs">
+                <span className="text-green-400">●</span> 60 FPS
+                </div>
+                <div className="font-mono text-white/40 text-xs">
+                1080p HD
+                </div>
+                <div className="font-mono text-white/40 text-xs">
+                IR: {enemiesHere.length > 0 ? <span className="text-red-400">ACTIVE</span> : 'OFF'}
+                </div>
             </div>
-            <div className="font-mono text-white/40 text-xs">
-              IR: {enemiesHere.length > 0 ? <span className="text-red-400">ACTIVE</span> : 'OFF'}
             </div>
-          </div>
         </div>
-      </div>
+      )}
 
-      {/* Рамка камеры */}
+      {/* ═══ МОДАЛЬНОЕ ОКНО НОЧНОГО ЦИКЛА (HUD OVERLAY) ═══ */}
+      {showNightInfo && nightCycle && enemies && gameId && (
+        <div className="absolute inset-0 z-50 bg-black/95 animate-in fade-in duration-200">
+            {/* Рамка HUD'а */}
+            <div className="absolute inset-0 border-2 border-purple-500/30 m-4 rounded-lg pointer-events-none z-50 shadow-[inset_0_0_20px_rgba(168,85,247,0.1)]"/>
+            
+            <NightCycleDisplay 
+                gameId={gameId}
+                nightCycle={nightCycle}
+                calculatedNight={calculatedNight || 1}
+                calculatedHour={calculatedHour || 12}
+                enemies={enemies}
+                isAdmin={isAdmin}
+                onClose={() => setShowNightInfo(false)}
+            />
+        </div>
+      )}
+
+      {/* Рамка камеры (декор) */}
       <div className="absolute inset-0 border-4 border-zinc-800 rounded-lg pointer-events-none z-10" />
       <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-white/30 rounded-tl-lg pointer-events-none z-10" />
       <div className="absolute top-0 right-0 w-8 h-8 border-t-4 border-r-4 border-white/30 rounded-tr-lg pointer-events-none z-10" />
