@@ -22,14 +22,19 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { MapNodeData, ROOM_IMAGES, getRoomByNodeId } from '@/lib/mapData';
+import { PlayerState } from '@/lib/types';
 import Image from 'next/image';
+import PlayerIndicators from './PlayerIndicators';
 
 interface CameraViewProps {
   currentNode: MapNodeData | null;
   viewingNode?: MapNodeData | null; // ★ Нода, которую СМОТРИМ (может отличаться от текущей позиции)
   nodeId: string;
   enemiesHere: { id: string; name: string; type: string }[];
-  playersHere: { id: string; name: string; isCurrentPlayer: boolean }[];
+  playersHere: { id: string; name: string; isCurrentPlayer: boolean; playerData?: PlayerState }[];
+  // ★ Новые пропсы для интерактивности
+  onAttackPlayer?: (targetPlayer: PlayerState) => void;
+  onInspectPlayer?: (targetPlayer: PlayerState) => void;
 }
 
 export default function CameraView({
@@ -37,7 +42,9 @@ export default function CameraView({
   viewingNode,
   nodeId,
   enemiesHere,
-  playersHere
+  playersHere,
+  onAttackPlayer,
+  onInspectPlayer
 }: CameraViewProps) {
   // Используем viewingNode если передан, иначе текущую ноду
   const displayNode = viewingNode || currentNode;
@@ -190,45 +197,15 @@ export default function CameraView({
         </div>
       )}
 
-      {/* ═══ СПИСОК ИГРОКОВ ═══ */}
-      {playersHere.length > 0 && (
-        <div className="absolute bottom-20 left-4 z-20">
-          <div className="bg-black/80 border border-green-500/40 rounded-xl overflow-hidden min-w-[160px] backdrop-blur-sm">
-            <div className="bg-green-900/60 px-4 py-2 border-b border-green-500/30">
-              <div className="flex items-center gap-2">
-                <div className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse shadow-lg shadow-green-500/50" />
-                <span className="text-green-400 font-mono text-xs uppercase tracking-widest">
-                  В локации
-                </span>
-                <span className="ml-auto text-green-400/60 font-mono text-xs">{playersHere.length}</span>
-              </div>
-            </div>
-            <div className="p-2 space-y-1">
-              {playersHere.map((p) => (
-                <div
-                  key={p.id}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg transition-all ${
-                    p.isCurrentPlayer
-                      ? 'bg-purple-900/50 border border-purple-500/40'
-                      : 'bg-zinc-800/50 hover:bg-zinc-700/50'
-                  }`}
-                >
-                  <div className={`w-2.5 h-2.5 rounded-full ${
-                    p.isCurrentPlayer ? 'bg-purple-500 shadow-lg shadow-purple-500/50' : 'bg-green-500'
-                  }`} />
-                  <span className={`font-mono text-sm ${
-                    p.isCurrentPlayer ? 'text-purple-300 font-bold' : 'text-white/70'
-                  }`}>
-                    {p.name}
-                  </span>
-                  {p.isCurrentPlayer && (
-                    <span className="ml-auto text-[10px] text-purple-400/60 font-mono">(ВЫ)</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+      {/* ═══ СПИСОК ИГРОКОВ (с интерактивным меню) ═══ */}
+      {playersHere.length > 0 && onAttackPlayer && onInspectPlayer && (
+        <PlayerIndicators
+          players={playersHere}
+          currentNodeId={displayNodeId}
+          isViewingCurrentLocation={!isRemoteViewing}
+          onAttack={onAttackPlayer}
+          onInspect={onInspectPlayer}
+        />
       )}
 
       {/* ═══ ЭФФЕКТЫ КАМЕРЫ ═══ */}

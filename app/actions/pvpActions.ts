@@ -286,7 +286,7 @@ export async function resolvePvPRound(
           : `${defender.name} блокирует атаку! (Защита: ${defender.stats.defense} >= Атака: ${attacker.stats.attack})`
       ];
 
-      // Проверка на победу
+      // ★ Проверка на победу - HP не уходит в 0, а сбрасывается до 10
       if (newDefenderHp <= 0) {
         combatLog.push(`${defender.name} повержен! ${attacker.name} побеждает!`);
 
@@ -297,10 +297,9 @@ export async function resolvePvPRound(
           outcome: attacker.id === attacker.pvpState!.initiatorId ? 'initiator_win' : 'target_win'
         };
 
-        // Обновляем HP защищающегося
+        // ★ HP сбрасывается до 10, статус НЕ DEAD
         t.update(defenderRef, {
-          'stats.hp': 0,
-          status: 'DEAD',
+          'stats.hp': 10,
           pvpState: completedPvpState
         });
 
@@ -438,10 +437,10 @@ export async function completePvP(
       // Добавляем предметы в инвентарь победителя
       const newWinnerInventory = [...winner.inventory, ...lootedItems];
 
-      // Обновляем состояния игроков
+      // ★ Обновляем состояния игроков - проигравший НЕ становится DEAD
       t.update(loserRef, {
         inventory: newLoserInventory,
-        status: 'DEAD',
+        status: 'IDLE',
         pvpOpponentId: null,
         pvpState: null,
         'gameLog': [

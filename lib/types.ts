@@ -226,7 +226,8 @@ export interface PlayerState {
   id: string;
   name: string;
   currentNode: string;
-  status: 'IDLE' | 'MOVING' | 'IN_COMBAT' | 'DEAD' | 'LOOTING' | 'IN_OFFICE' | 'IN_PVP';
+  // ★ Статус DEAD удалён - теперь при падении HP до 0 накладывается штраф и HP сбрасывается
+  status: 'IDLE' | 'MOVING' | 'IN_COMBAT' | 'LOOTING' | 'IN_OFFICE' | 'IN_PVP' | 'DEFEATED';
   stats: CharacterStats;
   equipment: Equipment;
   inventory: string[];
@@ -236,6 +237,7 @@ export interface PlayerState {
   currentEnemyId?: string | null; // ID текущего врага (аниматроник)
   pvpOpponentId?: string | null; // ID противника в PvP
   pvpState?: PvPEncounterState | null; // Состояние PvP боя
+  previousNode?: string | null; // ★ Предыдущая нода для отступления
 }
 
 // /END_ANCHOR:TYPES/PLAYER_STATE
