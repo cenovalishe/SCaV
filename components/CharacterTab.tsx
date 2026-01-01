@@ -21,6 +21,7 @@
 
 import { CharacterStats, Equipment } from '@/lib/types';
 import { calculateEffectiveStats } from '@/lib/itemData';
+import Image from 'next/image';
 
 interface CharacterTabProps {
   stats: CharacterStats;
@@ -54,6 +55,19 @@ function getStatColor(value: number): string {
   return 'text-red-400';
 }
 
+// Карта соответствия имен и файлов. 
+// Ключи (слева) должны совпадать с playerName, который приходит в компонент.
+const AVATAR_MAP: Record<string, string> = {
+  'player_1': '/avatars/Jacek.jpg',
+  'player_2': '/avatars/Valery.jpg',
+  'player_3': '/avatars/Marius.jpg',
+  // Добавьте остальных персонажей здесь
+  // 'ИмяПерсонажа': '/avatars/ИмяФайла.jpg'
+};
+
+// Путь к заглушке, если имя не найдено
+const DEFAULT_AVATAR = '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg';
+
 export default function CharacterTab({ stats, playerName, equipment }: CharacterTabProps) {
   // Расчёт эффективных статов с учётом экипировки
   const defaultEquipment: Equipment = {
@@ -72,69 +86,29 @@ export default function CharacterTab({ stats, playerName, equipment }: Character
   const staminaPercent = (effectiveStats.stamina / effectiveStats.maxStamina) * 100;
 
   return (
-    <div className="h-full flex p-2 gap-3">
-      {/* ЛЕВАЯ ЧАСТЬ - Аватар (увеличенный) */}
-      <div className="w-[55%] flex flex-col">
-        {/* Аватар контейнер (занимает всю высоту) */}
-        <div className="flex-1 relative border-2 border-purple-500/30 rounded-xl overflow-hidden bg-gradient-to-b from-purple-900/20 to-black">
-          {/* Декоративная рамка */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-purple-400/50" />
-            <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-purple-400/50" />
-            <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-purple-400/50" />
-            <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-purple-400/50" />
+              {/* Блок Аватара */}
+          <div className="relative w-full aspect-square bg-zinc-900 rounded-lg overflow-hidden border border-white/10 mb-4 group">
+            
+            {/* Изображение */}
+            <Image 
+              src={AVATAR_MAP[playerName] || DEFAULT_AVATAR} 
+              alt={playerName}
+              fill
+              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority
+            />
+            
+            {/* Затемнение снизу для читаемости текста (опционально) */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+          
+            {/* Имя поверх картинки (если нужно) */}
+            <div className="absolute bottom-3 left-3 right-3">
+              <h2 className="text-xl font-bold text-white drop-shadow-md tracking-wider">
+                {playerName}
+              </h2>
+            </div>
           </div>
-
-          {/* Фон градиент */}
-          <div className="absolute inset-0 bg-gradient-to-b from-purple-900/30 via-transparent to-black/50" />
-
-          {/* SVG Персонаж (увеличенный placeholder) */}
-          <div className="absolute inset-0 flex items-center justify-center">
-            <svg viewBox="0 0 80 150" className="w-full h-full max-w-[180px] max-h-[280px]">
-              <defs>
-                <filter id="glow-avatar">
-                  <feGaussianBlur stdDeviation="2" result="coloredBlur"/>
-                  <feMerge>
-                    <feMergeNode in="coloredBlur"/>
-                    <feMergeNode in="SourceGraphic"/>
-                  </feMerge>
-                </filter>
-                <linearGradient id="bodyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor="#a855f7" stopOpacity="0.8" />
-                  <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.6" />
-                </linearGradient>
-              </defs>
-
-              {/* Голова */}
-              <ellipse cx="40" cy="25" rx="18" ry="20" fill="none" stroke="url(#bodyGrad)" strokeWidth="2" filter="url(#glow-avatar)" />
-
-              {/* Глаза */}
-              <circle cx="33" cy="22" r="3" fill="#a855f7" filter="url(#glow-avatar)">
-                <animate attributeName="opacity" values="1;0.5;1" dur="3s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="47" cy="22" r="3" fill="#a855f7" filter="url(#glow-avatar)">
-                <animate attributeName="opacity" values="1;0.5;1" dur="3s" repeatCount="indefinite" />
-              </circle>
-
-              {/* Тело */}
-              <line x1="40" y1="45" x2="40" y2="90" stroke="url(#bodyGrad)" strokeWidth="3" filter="url(#glow-avatar)" />
-
-              {/* Руки */}
-              <line x1="40" y1="55" x2="15" y2="80" stroke="url(#bodyGrad)" strokeWidth="2.5" />
-              <line x1="40" y1="55" x2="65" y2="80" stroke="url(#bodyGrad)" strokeWidth="2.5" />
-
-              {/* Ноги */}
-              <line x1="40" y1="90" x2="20" y2="130" stroke="url(#bodyGrad)" strokeWidth="2.5" />
-              <line x1="40" y1="90" x2="60" y2="130" stroke="url(#bodyGrad)" strokeWidth="2.5" />
-
-              {/* Декоративные элементы */}
-              <circle cx="40" cy="65" r="5" fill="none" stroke="#a855f7" strokeWidth="1" opacity="0.5">
-                <animate attributeName="r" values="5;8;5" dur="2s" repeatCount="indefinite" />
-                <animate attributeName="opacity" values="0.5;0.2;0.5" dur="2s" repeatCount="indefinite" />
-              </circle>
-            </svg>
-          </div>
-
           {/* Имя и класс */}
           <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black to-transparent">
             <div className="text-purple-400/70 text-[9px] font-mono tracking-[0.2em] uppercase">
