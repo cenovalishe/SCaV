@@ -672,7 +672,6 @@ export function calculateEffectiveStats(
     speed: Math.max(0, baseStats.speed + (modifiers.speed || 0)),
     stealth: Math.max(0, baseStats.stealth + (modifiers.stealth || 0)),
     luck: Math.max(0, baseStats.luck + (modifiers.luck || 0)),
-    capacity: Math.max(1, baseStats.capacity + (modifiers.capacity || 0)),
     hp: baseStats.hp, // HP не меняется от экипировки напрямую
     maxHp: Math.max(1, baseStats.maxHp + (modifiers.maxHp || 0)),
     stamina: baseStats.stamina, // Stamina не меняется от экипировки
