@@ -58,9 +58,13 @@ function getStatColor(value: number): string {
 // Карта соответствия имен и файлов. 
 // Ключи (слева) должны совпадать с playerName, который приходит в компонент.
 const AVATAR_MAP: Record<string, string> = {
-  'player_1': '/avatars/Jacek.jpg',
-  'player_2': '/avatars/Valery.jpg',
-  'player_3': '/avatars/Marius.jpg',
+  'player_manki': '/avatars/Gemini_Generated_Image_bnrjhkbnrjhkbnrj.jpg',
+  'player_cenoval': '/avatars/Gemini_Generated_Image_mwil02mwil02mwil.jpg',
+  'player_malekith': '/avatars/Gemini_Generated_Image_ffspc2ffspc2ffsp.jpg',
+  'player_marenyuk': '/avatars/Gemini_Generated_Image_ncif9qncif9qncif.jpg',
+  'player_shoker': '/avatars/Gemini_Generated_Image_kd8ffmkd8ffmkd8f.jpg',
+  'player_sunekoi': '/avatars/Gemini_Generated_Image_r4h8kdr4h8kdr4h8.jpg',
+  'player_smailgames': 'avatars/Gemini_Generated_Image_vmf1hgvmf1hgvmf1.jpg',
   // Добавьте остальных персонажей здесь
   // 'ИмяПерсонажа': '/avatars/ИмяФайла.jpg'
 };
