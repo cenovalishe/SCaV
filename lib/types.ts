@@ -47,7 +47,7 @@
  *
  * TYPES (Перечисления):
  * ┌─────────────────────┬────────────────────────────────────────────────────────┐
- * │ EquipmentSlotType   │ Типы слотов: helmet, armor, clothes, pocket1-4...     │
+ * │ EquipmentSlotType   │ Типы слотов: helmet, armor, pocket1-4...              │
  * │ ContainerType       │ Типы контейнеров: rig, bag, backpack                  │
  * │ DangerLevel         │ Уровни опасности: safe, low, medium, high, extreme    │
  * │ LocationLootType    │ Типы лута локации: rare, common, supplies             │
@@ -103,7 +103,6 @@ export interface CharacterStats {
 export type EquipmentSlotType =
   | 'helmet'      // Шлем - защита головы
   | 'armor'       // Броня - защита тела
-  | 'clothes'     // Одежда - базовая защита
   | 'pocket1'     // Карман 1 - быстрый доступ
   | 'pocket2'     // Карман 2
   | 'pocket3'     // Карман 3
@@ -127,7 +126,6 @@ export type ItemType = 'consumable' | 'equipment' | 'weapon' | 'attachment' | 'v
 export type ItemSubType =
   | 'helmet'      // Шлемы
   | 'armor'       // Броня
-  | 'clothes'     // Одежда
   | 'weapon'      // Оружие
   | 'module'      // Модули (фонарик, прицел и т.д.)
   | 'consumable'  // Расходники
@@ -139,7 +137,6 @@ export type ItemSubType =
 export const SLOT_ALLOWED_SUBTYPES: Record<string, ItemSubType[]> = {
   helmet: ['helmet'],
   armor: ['armor'],
-  clothes: ['clothes'],
   weapon: ['weapon'],
   module0: ['module'],
   module1: ['module'],
@@ -210,7 +207,7 @@ export interface Item {
   name: string;
   nameRu: string;
   type: 'consumable' | 'equipment' | 'weapon' | 'attachment' | 'valuable' | 'key';
-  subType?: ItemSubType;  // Подтип для ограничений слотов (helmet, armor, clothes, weapon, module и т.д.)
+  subType?: ItemSubType;  // Подтип для ограничений слотов (helmet, armor, weapon, module и т.д.)
   value: number;
 
   // ИЗМЕНЕНИЕ: Заменяем абстрактный size на конкретные измерения
@@ -242,7 +239,6 @@ export interface ItemEffect {
 export interface Equipment {
   helmet: string | null;
   armor: string | null;
-  clothes: string | null;
   pockets: (string | null)[];   // 4 кармана
   specials: (string | null)[];  // 3 спец слота
   weapon: string | null;
