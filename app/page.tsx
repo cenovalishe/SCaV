@@ -175,6 +175,9 @@ export default function GameBoard() {
 
   // Хук игры
   const { player, allPlayers, enemies, loading } = useGame(GAME_ID, playerId || '');
+  
+  const isCheckingTurn = useRef(false);
+
 
   // [FIX] Синхронизация PvP состояния для второго игрока
   // Этот эффект автоматически открывает окно, когда сервер назначает игроку pvpState
@@ -214,11 +217,6 @@ export default function GameBoard() {
       }
     }
   }, [player, allPlayers, pvpEncounter, addLogEntry]);
-
-  
-
-  
-  const isCheckingTurn = useRef(false);
 
   
   // Проверка одновременных ходов
