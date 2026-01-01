@@ -258,7 +258,8 @@ export async function movePlayer(
       const playersSnap = await playersRef.get();
 
       otherPlayersInNode = playersSnap.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
+        // [FIX] Добавлено 'as any', чтобы TypeScript видел свойства из doc.data()
+        .map(doc => ({ id: doc.id, ...doc.data() } as any))
         .filter(p =>
           p.id !== playerId && // Не текущий игрок
           p.currentNode === targetNodeId && // На той же ноде
