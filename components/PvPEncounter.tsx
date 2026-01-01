@@ -58,7 +58,8 @@ export default function PvPEncounter({
   // Инициировать PvP
   const handleInitiatePvP = useCallback(async () => {
     const result = await initiatePvP(gameId, currentPlayer.id, otherPlayer.id);
-    if (result.success && result.pvpState) {
+    // [FIX] Используем 'in' для проверки наличия свойства, чтобы TypeScript корректно сузил тип
+    if (result.success && 'pvpState' in result) {
       setPvpState(result.pvpState);
       setCombatLog(result.pvpState.combatLog);
       setPhase('response_pending');
