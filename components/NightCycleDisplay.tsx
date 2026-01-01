@@ -4,10 +4,8 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * PURPOSE: UI компонент для отображения глобального цикла ночей
- *          Показывает текущую ночь, час, таймер и AI уровни аниматроников
+ * Показывает таймеры и AI уровни. Теперь поддерживает режим модалки.
  *
- * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2026-01-01 | VERSION: 1.0.0
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -18,12 +16,10 @@ import { GlobalNightCycle, AnimatronicState } from '@/lib/types';
 import {
   NIGHT_CYCLE_TIMINGS,
   formatTime,
-  getAnimatronicAILevel,
   getAllAnimatronicAILevels,
   ANIMATRONIC_NAMES_RU,
   ANIMATRONIC_EMOJI,
   TOTAL_NIGHTS,
-  LAST_HOUR,
 } from '@/lib/nightCycleConfig';
 import { startNightCycle, syncNightCycle } from '@/app/actions/nightCycleActions';
 
@@ -33,7 +29,8 @@ interface NightCycleDisplayProps {
   calculatedNight: number;
   calculatedHour: number;
   enemies: AnimatronicState[];
-  isAdmin?: boolean; // Для показа кнопки запуска
+  isAdmin?: boolean;
+  onClose?: () => void; // ★ Callback для закрытия
 }
 
 export default function NightCycleDisplay({
@@ -43,6 +40,7 @@ export default function NightCycleDisplay({
   calculatedHour,
   enemies,
   isAdmin = false,
+  onClose
 }: NightCycleDisplayProps) {
   const [remainingTime, setRemainingTime] = useState<string>('--');
   const [timeUntilNextHour, setTimeUntilNextHour] = useState<string>('--');
@@ -89,12 +87,10 @@ export default function NightCycleDisplay({
       }
     };
 
-    // Синхронизируемся каждые 30 секунд
     const syncInterval = setInterval(syncWithServer, 30000);
     return () => clearInterval(syncInterval);
   }, [gameId, nightCycle.isActive]);
 
-  // Запуск цикла
   const handleStartCycle = async () => {
     setIsStarting(true);
     try {
@@ -104,10 +100,8 @@ export default function NightCycleDisplay({
     }
   };
 
-  // Получаем AI уровни для текущей ночи и часа
   const aiLevels = getAllAnimatronicAILevels(calculatedNight, calculatedHour);
 
-  // Визуализация AI уровня (полоска прогресса)
   const renderAIBar = (aiLevel: number) => {
     const percentage = (aiLevel / 20) * 100;
     let colorClass = 'bg-green-500';
@@ -115,166 +109,144 @@ export default function NightCycleDisplay({
     if (aiLevel > 15) colorClass = 'bg-red-500';
 
     return (
-      <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+      <div className="w-full h-2 bg-gray-700/50 rounded-full overflow-hidden border border-white/5">
         <div
-          className={`h-full ${colorClass} transition-all duration-500`}
+          className={`h-full ${colorClass} transition-all duration-500 shadow-[0_0_10px_currentColor]`}
           style={{ width: `${percentage}%` }}
         />
       </div>
     );
   };
 
-  // Проверка, завершился ли цикл
   const isCycleCompleted = nightCycle.isActive &&
     nightCycle.startedAt &&
     (Date.now() - nightCycle.startedAt >= NIGHT_CYCLE_TIMINGS.totalDurationMs);
 
   return (
-    <div className="bg-gray-900/90 backdrop-blur-sm border border-gray-700 rounded-lg p-4 shadow-lg">
-      {/* Заголовок с ночью и часом */}
-      <div className="flex items-center justify-between mb-4">
+    <div className="h-full flex flex-col bg-black/90 backdrop-blur-md p-6 text-white custom-scrollbar overflow-y-auto">
+      
+      {/* Header с кнопкой закрытия */}
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/20">
         <div className="flex items-center gap-3">
-          <span className="text-2xl">🌙</span>
+          <span className="text-3xl animate-pulse">🌙</span>
           <div>
-            <h2 className="text-xl font-bold text-white">
-              {nightCycle.isActive ? (
-                isCycleCompleted ? (
-                  <span className="text-green-400">Цикл завершён!</span>
-                ) : (
-                  <>
-                    Ночь {calculatedNight}/{TOTAL_NIGHTS}
-                  </>
-                )
-              ) : (
-                'Ожидание...'
-              )}
+            <h2 className="text-xl font-bold font-mono tracking-widest uppercase">
+              Глобальный Цикл
             </h2>
-            {nightCycle.isActive && !isCycleCompleted && (
-              <p className="text-3xl font-mono text-blue-400">
-                {calculatedHour} AM
-              </p>
+            {isSyncing && (
+              <span className="text-[10px] text-blue-400 font-mono animate-pulse">
+                СИНХРОНИЗАЦИЯ ДАННЫХ...
+              </span>
             )}
           </div>
         </div>
-
-        {/* Статус синхронизации */}
-        {isSyncing && (
-          <div className="text-xs text-gray-400 animate-pulse">
-            Синхронизация...
-          </div>
+        
+        {onClose && (
+          <button 
+            onClick={onClose}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors group"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6 text-white/50 group-hover:text-white">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         )}
       </div>
 
-      {/* Кнопка запуска (только для админа) */}
-      {!nightCycle.isActive && isAdmin && (
-        <button
-          onClick={handleStartCycle}
-          disabled={isStarting}
-          className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 disabled:bg-gray-600
-                     text-white font-bold rounded-lg transition-colors mb-4"
-        >
-          {isStarting ? 'Запуск...' : '🚀 Запустить глобальный цикл'}
-        </button>
-      )}
-
-      {/* Таймеры */}
-      {nightCycle.isActive && !isCycleCompleted && (
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          <div className="bg-gray-800 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-400 mb-1">До следующего часа</p>
-            <p className="text-lg font-mono text-yellow-400">{timeUntilNextHour}</p>
-          </div>
-          <div className="bg-gray-800 rounded-lg p-3 text-center">
-            <p className="text-xs text-gray-400 mb-1">Всего осталось</p>
-            <p className="text-lg font-mono text-green-400">{remainingTime}</p>
-          </div>
+      <div className="space-y-6">
+        {/* Статус */}
+        <div className="text-center">
+             {nightCycle.isActive ? (
+                isCycleCompleted ? (
+                  <span className="text-green-400 font-mono text-xl">ЦИКЛ ЗАВЕРШЁН</span>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-4xl font-mono font-bold text-white drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]">
+                       НОЧЬ {calculatedNight} <span className="text-white/30 text-2xl">/ {TOTAL_NIGHTS}</span>
+                    </span>
+                    <span className="text-5xl font-mono font-bold text-blue-400 drop-shadow-[0_0_15px_rgba(59,130,246,0.8)] mt-2">
+                      {calculatedHour} AM
+                    </span>
+                  </div>
+                )
+              ) : (
+                <span className="text-white/50 font-mono">ОЖИДАНИЕ ЗАПУСКА...</span>
+              )}
         </div>
-      )}
 
-      {/* Прогресс ночи (часы 1-6 AM) */}
-      {nightCycle.isActive && !isCycleCompleted && (
-        <div className="mb-4">
-          <p className="text-xs text-gray-400 mb-2">Прогресс ночи</p>
-          <div className="flex gap-1">
-            {[1, 2, 3, 4, 5, 6].map((hour) => (
-              <div
-                key={hour}
-                className={`flex-1 h-3 rounded ${
-                  hour <= calculatedHour
-                    ? 'bg-blue-500'
-                    : 'bg-gray-700'
-                } transition-colors`}
-              />
-            ))}
+        {/* Таймеры */}
+        {nightCycle.isActive && !isCycleCompleted && (
+          <div className="grid grid-cols-2 gap-4">
+            <div className="bg-zinc-900/80 border border-white/10 rounded-lg p-4 text-center hover:border-yellow-500/50 transition-colors">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Смена часа через</p>
+              <p className="text-2xl font-mono text-yellow-400">{timeUntilNextHour}</p>
+            </div>
+            <div className="bg-zinc-900/80 border border-white/10 rounded-lg p-4 text-center hover:border-green-500/50 transition-colors">
+              <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">Конец цикла</p>
+              <p className="text-2xl font-mono text-green-400">{remainingTime}</p>
+            </div>
           </div>
-          <div className="flex justify-between text-xs text-gray-500 mt-1">
-            <span>1 AM</span>
-            <span>6 AM</span>
-          </div>
-        </div>
-      )}
+        )}
 
-      {/* AI уровни аниматроников */}
-      {nightCycle.isActive && (
-        <div>
-          <p className="text-xs text-gray-400 mb-2">Уровни активности аниматроников</p>
-          <div className="space-y-2">
-            {['freddy', 'bonnie', 'chica', 'foxy'].map((animId) => {
-              const aiLevel = aiLevels[animId] || 0;
-              const isActive = aiLevel > 0;
-              const enemy = enemies.find(e => e.id === animId || e.type === animId);
+        {/* Кнопка админа */}
+        {!nightCycle.isActive && isAdmin && (
+          <button
+            onClick={handleStartCycle}
+            disabled={isStarting}
+            className="w-full py-4 bg-green-600/20 border border-green-500 hover:bg-green-600/40 
+                       text-green-400 font-bold font-mono rounded-lg transition-all hover:scale-[1.02] uppercase tracking-widest"
+          >
+            {isStarting ? 'Инициализация...' : '🚀 Запустить протокол ночи'}
+          </button>
+        )}
 
-              return (
-                <div key={animId} className="flex items-center gap-2">
-                  <span className="text-lg w-6">{ANIMATRONIC_EMOJI[animId]}</span>
-                  <span className={`text-sm w-16 ${isActive ? 'text-white' : 'text-gray-500'}`}>
-                    {ANIMATRONIC_NAMES_RU[animId]}
-                  </span>
-                  <div className="flex-1">
+        {/* AI Уровни */}
+        {nightCycle.isActive && (
+          <div className="bg-zinc-900/50 rounded-xl p-4 border border-white/5">
+            <p className="text-xs font-mono text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"/>
+              Активность ИИ
+            </p>
+            <div className="space-y-4">
+              {['freddy', 'bonnie', 'chica', 'foxy'].map((animId) => {
+                const aiLevel = aiLevels[animId] || 0;
+                const isActive = aiLevel > 0;
+                const enemy = enemies.find(e => e.id === animId || e.type === animId);
+
+                return (
+                  <div key={animId} className="group">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl filter drop-shadow-md group-hover:scale-110 transition-transform">
+                            {ANIMATRONIC_EMOJI[animId]}
+                        </span>
+                        <span className={`font-mono text-sm font-bold ${isActive ? 'text-white' : 'text-gray-600'}`}>
+                          {ANIMATRONIC_NAMES_RU[animId]}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                         {enemy && (
+                            <span className="text-[10px] font-mono bg-white/10 px-1.5 py-0.5 rounded text-white/60">
+                              CAM-{enemy.currentNode}
+                            </span>
+                          )}
+                          <span className={`font-mono text-sm font-bold w-12 text-right ${
+                            aiLevel === 0 ? 'text-gray-600' :
+                            aiLevel <= 10 ? 'text-green-400' :
+                            'text-red-500'
+                          }`}>
+                            AI: {aiLevel}
+                          </span>
+                      </div>
+                    </div>
                     {renderAIBar(aiLevel)}
                   </div>
-                  <span className={`text-xs w-8 text-right font-mono ${
-                    aiLevel === 0 ? 'text-gray-500' :
-                    aiLevel <= 5 ? 'text-green-400' :
-                    aiLevel <= 10 ? 'text-yellow-400' :
-                    aiLevel <= 15 ? 'text-orange-400' :
-                    'text-red-400'
-                  }`}>
-                    {aiLevel}/20
-                  </span>
-                  {/* Текущая локация аниматроника */}
-                  {enemy && (
-                    <span className="text-xs text-gray-500 w-8">
-                      [{enemy.currentNode}]
-                    </span>
-                  )}
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
-
-      {/* Информация о прогрессии */}
-      {nightCycle.isActive && !isCycleCompleted && (
-        <div className="mt-4 pt-3 border-t border-gray-700">
-          <p className="text-xs text-gray-500 text-center">
-            Каждые 8 часов: +1 AM | Каждые 2 суток: +1 ночь
-          </p>
-        </div>
-      )}
-
-      {/* Сообщение о завершении */}
-      {isCycleCompleted && (
-        <div className="text-center py-4">
-          <p className="text-green-400 text-lg font-bold mb-2">
-            🎉 Все 5 ночей пройдены!
-          </p>
-          <p className="text-gray-400 text-sm">
-            Цикл длился 10 реальных суток
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
