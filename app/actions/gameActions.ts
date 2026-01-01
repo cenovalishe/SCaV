@@ -24,19 +24,19 @@
  * ═══════════════════════════════════════════════════════════════════════════════
  *
  * SERVER ACTIONS:
- *   movePlayer(gameId, playerId, targetNodeId) → MoveResponse
- *   getOrCreatePlayer(gameId, savedPlayerId)   → { success, playerId? }
- *   getTakenPlayerSlots(gameId)                → { takenSlots }
- *   createPlayerInSlot(gameId, slotId, name)   → { success, playerId }
- *   updateStamina(gameId, playerId, change)    → { success, newStamina }
- *   applyDamage(gameId, playerId, damage)      → { success, newHp, isDead }
- *   lootLocation(gameId, playerId)             → { success, items }
- *   checkAllPlayersExhausted(gameId)           → { allExhausted }
- *   startNewTurnForAll(gameId)                 → { success, playerResults }
- *   respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
+ * movePlayer(gameId, playerId, targetNodeId) → MoveResponse
+ * getOrCreatePlayer(gameId, savedPlayerId)   → { success, playerId? }
+ * getTakenPlayerSlots(gameId)                → { takenSlots }
+ * createPlayerInSlot(gameId, slotId, name)   → { success, playerId }
+ * updateStamina(gameId, playerId, change)    → { success, newStamina }
+ * applyDamage(gameId, playerId, damage)      → { success, newHp, isDead }
+ * lootLocation(gameId, playerId)             → { success, items }
+ * checkAllPlayersExhausted(gameId)           → { allExhausted }
+ * startNewTurnForAll(gameId)                 → { success, playerResults }
+ * respawnEnemiesIfNeeded(gameId)             → { success, spawned, message }
  *
  * ═══════════════════════════════════════════════════════════════════════════════
- * LAST MODIFIED: 2024-12-31 | VERSION: 2.0.0 (с семантическими якорями)
+ * LAST MODIFIED: 2026-01-01 | VERSION: 2.1.0 (Fix revalidatePath)
  * ═══════════════════════════════════════════════════════════════════════════════
  */
 
@@ -421,7 +421,9 @@ export async function movePlayer(
       message = `Встречен игрок ${otherPlayersInNode[0].name} в PvP зоне!`;
     }
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout' для полного обновления кэша всех вложенных страниц (включая /game/[id])
+    revalidatePath('/', 'layout');
+    
     return {
       success: true,
       message: message,
@@ -543,7 +545,8 @@ export async function updateStamina(gameId: string, playerId: string, staminaCha
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newStamina };
   } catch (e) {
     console.error(e);
@@ -624,7 +627,8 @@ export async function handleAnimatronicDefeat(
       };
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return result;
   } catch (error) {
     console.error('Animatronic defeat handling error:', error);
@@ -660,7 +664,8 @@ export async function applyDamage(gameId: string, playerId: string, damage: numb
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newHp, isDefeated };
   } catch (e) {
     console.error(e);
@@ -756,7 +761,8 @@ export async function lootLocation(gameId: string, playerId: string) {
         'stats.stamina': currentStamina - 1,
         lastUpdated: FieldValue.serverTimestamp()
       });
-      revalidatePath('/');
+      // ★ FIX: Используем 'layout'
+      revalidatePath('/', 'layout');
       return { success: true, message: 'Ничего не найдено', items: [], newStamina: currentStamina - 1 };
     }
 
@@ -842,7 +848,8 @@ export async function lootLocation(gameId: string, playerId: string) {
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
 
     // Формируем сообщение о результате
     let message = `Найдено: ${foundItems.length}`;
@@ -934,7 +941,8 @@ export async function startNewTurnForAll(gameId: string) {
 
     await Promise.all(updatePromises);
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return {
       success: true,
       message: 'Новый ход начался для всех игроков!',
@@ -972,7 +980,8 @@ export async function newTurn(gameId: string, playerId: string) {
       lastUpdated: FieldValue.serverTimestamp()
     });
 
-    revalidatePath('/');
+    // ★ FIX: Используем 'layout'
+    revalidatePath('/', 'layout');
     return { success: true, newStamina, diceRoll };
   } catch (e) {
     console.error(e);
