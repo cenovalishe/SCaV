@@ -159,19 +159,21 @@ export function useGame(gameId: string, playerId: string) {
     return () => unsubscribe();
   }, [gameId]);
 
-  // 5. Локальный таймер для обновления Часа/Ночи на клиенте
+// 5. Локальный таймер для обновления Часа/Ночи на клиенте
   useEffect(() => {
     if (!nightCycle.isActive || !nightCycle.startedAt) {
-        // ★ ИСПРАВЛЕНО: nightNumber -> currentNight
         setCalculatedNight(nightCycle.currentNight || 1);
-        setCalculatedHour(12); // Дефолтное время
+        setCalculatedHour(12);
         return;
     }
 
     const updateTime = () => {
         const result = calculateNightAndHour(nightCycle.startedAt!);
-        setCalculatedNight(result.night);
-        setCalculatedHour(result.hour);
+        // ★ ИСПРАВЛЕНО: Проверяем, что результат не null
+        if (result) {
+            setCalculatedNight(result.night);
+            setCalculatedHour(result.hour);
+        }
     };
 
     updateTime();
