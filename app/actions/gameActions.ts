@@ -495,7 +495,6 @@ export async function createPlayerInSlot(gameId: string, slotId: string, playerN
         defense: 1,      // Защита: 1
         speed: 1,        // Скорость: 1
         luck: 0,         // Удача: 0
-        capacity: 20,    // Вместимость
         maxHp: 100,      // Максимальное ХП
       },
       inventory: [],     // Пустой инвентарь
